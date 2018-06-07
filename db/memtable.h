@@ -26,7 +26,7 @@ class MemTable {
   void Ref() { ++refs_; }
 
   // Drop reference count.  Delete if no more references exist.
-  void Unref() {
+  void Unref() {//DHQ: maybe we can replace this with shared_ptr/unique_ptr, depends on the scenario?
     --refs_;
     assert(refs_ >= 0);
     if (refs_ <= 0) {

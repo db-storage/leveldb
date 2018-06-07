@@ -275,7 +275,7 @@ void DBImpl::DeleteObsoleteFiles() {
     }
   }
 }
-
+//DHQ： edit，是用来记录RecoverLogFile获得的修改。而不是manifest中记录的edit，后者有 VerstionSet->Recovery()处理了
 Status DBImpl::Recover(VersionEdit* edit, bool *save_manifest) {
   mutex_.AssertHeld();
 
@@ -306,7 +306,7 @@ Status DBImpl::Recover(VersionEdit* edit, bool *save_manifest) {
     }
   }
 
-  s = versions_->Recover(save_manifest);
+  s = versions_->Recover(save_manifest);//DHQ: 这里面会根据manifest，恢复VersionSet。后面RecoverLogFile还好产生VersionEdit
   if (!s.ok()) {
     return s;
   }
@@ -322,7 +322,7 @@ Status DBImpl::Recover(VersionEdit* edit, bool *save_manifest) {
   const uint64_t min_log = versions_->LogNumber();
   const uint64_t prev_log = versions_->PrevLogNumber();
   std::vector<std::string> filenames;
-  s = env_->GetChildren(dbname_, &filenames);
+  s = env_->GetChildren(dbname_, &filenames);//DHQ: 目录下file name的全集
   if (!s.ok()) {
     return s;
   }
@@ -331,14 +331,14 @@ Status DBImpl::Recover(VersionEdit* edit, bool *save_manifest) {
   uint64_t number;
   FileType type;
   std::vector<uint64_t> logs;
-  for (size_t i = 0; i < filenames.size(); i++) {
+  for (size_t i = 0; i < filenames.size(); i++) {//DHQ: 遍历全集
     if (ParseFileName(filenames[i], &number, &type)) {
       expected.erase(number);
       if (type == kLogFile && ((number >= min_log) || (number == prev_log)))
-        logs.push_back(number);
+        logs.push_back(number);//DHQ: 有用的log 放这里
     }
   }
-  if (!expected.empty()) {
+  if (!expected.empty()) {//DHQ：Version需要的文件找不到
     char buf[50];
     snprintf(buf, sizeof(buf), "%d missing files; e.g.",
              static_cast<int>(expected.size()));
@@ -360,7 +360,7 @@ Status DBImpl::Recover(VersionEdit* edit, bool *save_manifest) {
     versions_->MarkFileNumberUsed(logs[i]);
   }
 
-  if (versions_->LastSequence() < max_sequence) {
+  if (versions_->LastSequence() < max_sequence) {//DHQ: RecoverLogFile可能修改了 max_sequence 
     versions_->SetLastSequence(max_sequence);
   }
 
@@ -422,11 +422,11 @@ Status DBImpl::RecoverLogFile(uint64_t log_number, bool last_log,
           record.size(), Status::Corruption("log record too small"));
       continue;
     }
-    WriteBatchInternal::SetContents(&batch, record);
+    WriteBatchInternal::SetContents(&batch, record);//DHQ: use internal batch, not external
 
     if (mem == nullptr) {
       mem = new MemTable(internal_comparator_);
-      mem->Ref();
+      mem->Ref();//DHQ: Add ref here
     }
     status = WriteBatchInternal::InsertInto(&batch, mem);
     MaybeIgnoreError(&status);
@@ -439,7 +439,7 @@ Status DBImpl::RecoverLogFile(uint64_t log_number, bool last_log,
     if (last_seq > *max_sequence) {
       *max_sequence = last_seq;
     }
-
+    //DHQ: memtable 达到上限，写到level0
     if (mem->ApproximateMemoryUsage() > options_.write_buffer_size) {
       compactions++;
       *save_manifest = true;
@@ -454,7 +454,7 @@ Status DBImpl::RecoverLogFile(uint64_t log_number, bool last_log,
     }
   }
 
-  delete file;
+  delete file;//delete struct, not the log file.
 
   // See if we should keep reusing the last log file.
   if (status.ok() && options_.reuse_logs && last_log && compactions == 0) {
@@ -537,7 +537,7 @@ Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit,
 }
 
 void DBImpl::CompactMemTable() {
-  mutex_.AssertHeld();
+  mutex_.AssertHeld();//DHQ: only one thread can do this
   assert(imm_ != nullptr);
 
   // Save the contents of the memtable as a new Table

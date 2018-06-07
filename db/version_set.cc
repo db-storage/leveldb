@@ -854,7 +854,7 @@ Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
     s = env_->NewWritableFile(new_manifest_file, &descriptor_file_);
     if (s.ok()) {
       descriptor_log_ = new log::Writer(descriptor_file_);
-      s = WriteSnapshot(descriptor_log_);
+      s = WriteSnapshot(descriptor_log_); //DHQ： 这个也很费时间，为什么不Unlock?
     }
   }
 
@@ -865,7 +865,7 @@ Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
     // Write new record to MANIFEST log
     if (s.ok()) {
       std::string record;
-      edit->EncodeTo(&record);
+      edit->EncodeTo(&record); //这个是增量
       s = descriptor_log_->AddRecord(record);
       if (s.ok()) {
         s = descriptor_file_->Sync();
@@ -990,7 +990,7 @@ Status VersionSet::Recover(bool *save_manifest) {
   file = nullptr;
 
   if (s.ok()) {
-    if (!have_next_file) {
+    if (!have_next_file) {//DHQ: 至少有一个全量版本，有next_file, log_number等
       s = Status::Corruption("no meta-nextfile entry in descriptor");
     } else if (!have_log_number) {
       s = Status::Corruption("no meta-lognumber entry in descriptor");
@@ -1012,7 +1012,7 @@ Status VersionSet::Recover(bool *save_manifest) {
     // Install recovered version
     Finalize(v);
     AppendVersion(v);
-    manifest_file_number_ = next_file;
+    manifest_file_number_ = next_file; //DHQ：预留给Manifest file 的number，但是实际上不一定会写 manifest，可能 ReuseManifest
     next_file_number_ = next_file + 1;
     last_sequence_ = last_sequence;
     log_number_ = log_number;
@@ -1187,10 +1187,10 @@ uint64_t VersionSet::ApproximateOffsetOf(Version* v, const InternalKey& ikey) {
   return result;
 }
 
-void VersionSet::AddLiveFiles(std::set<uint64_t>* live) {
+void VersionSet::AddLiveFiles(std::set<uint64_t>* live) {//DHQ: 各个version所使用的file，不是它删除或者新增的file
   for (Version* v = dummy_versions_.next_;
        v != &dummy_versions_;
-       v = v->next_) {
+       v = v->next_) { 
     for (int level = 0; level < config::kNumLevels; level++) {
       const std::vector<FileMetaData*>& files = v->files_[level];
       for (size_t i = 0; i < files.size(); i++) {
