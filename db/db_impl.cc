@@ -503,9 +503,9 @@ Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit,
 
   Status s;
   {
-    mutex_.Unlock();
-    s = BuildTable(dbname_, env_, options_, table_cache_, iter, &meta);
-    mutex_.Lock();
+    mutex_.Unlock();//DHQ: unlock first, it is time consuming
+    s = BuildTable(dbname_, env_, options_, table_cache_, iter, &meta); //DHQ: write file inside
+    mutex_.Lock();//Lock again
   }
 
   Log(options_.info_log, "Level-0 table #%llu: %lld bytes %s",
@@ -523,7 +523,7 @@ Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit,
     const Slice min_user_key = meta.smallest.user_key();
     const Slice max_user_key = meta.largest.user_key();
     if (base != nullptr) {
-      level = base->PickLevelForMemTableOutput(min_user_key, max_user_key);
+      level = base->PickLevelForMemTableOutput(min_user_key, max_user_key); //DHQ: pick level, may sink down. 
     }
     edit->AddFile(level, meta.number, meta.file_size,
                   meta.smallest, meta.largest);
@@ -543,7 +543,7 @@ void DBImpl::CompactMemTable() {
   // Save the contents of the memtable as a new Table
   VersionEdit edit;
   Version* base = versions_->current();
-  base->Ref();
+  base->Ref();//DHQ: not holding the lock all the time during WriteLevel0Table, so needs Ref
   Status s = WriteLevel0Table(imm_, &edit, base);
   base->Unref();
 
@@ -1201,14 +1201,14 @@ Status DBImpl::Delete(const WriteOptions& options, const Slice& key) {
 }
 
 Status DBImpl::Write(const WriteOptions& options, WriteBatch* my_batch) {
-  Writer w(&mutex_);
+  Writer w(&mutex_); //DHQ: mutex_用于初始化 cv，下面的cv.Wait()，等待时不会持有mutex
   w.batch = my_batch;
   w.sync = options.sync;
   w.done = false;
 
   MutexLock l(&mutex_);
-  writers_.push_back(&w);
-  while (!w.done && &w != writers_.front()) {
+  writers_.push_back(&w); //DHQ: 并发的Write，公用writers，然后一起打包成同一个log record
+  while (!w.done && &w != writers_.front()) {//DHQ: Front的负责写log
     w.cv.Wait();
   }
   if (w.done) {
@@ -1326,7 +1326,7 @@ WriteBatch* DBImpl::BuildBatchGroup(Writer** last_writer) {
 // REQUIRES: mutex_ is held
 // REQUIRES: this thread is currently at the front of the writer queue
 Status DBImpl::MakeRoomForWrite(bool force) {
-  mutex_.AssertHeld();
+  mutex_.AssertHeld();//DHQ: 持有了mutex_
   assert(!writers_.empty());
   bool allow_delay = !force;
   Status s;
@@ -1337,7 +1337,7 @@ Status DBImpl::MakeRoomForWrite(bool force) {
       break;
     } else if (
         allow_delay &&
-        versions_->NumLevelFiles(0) >= config::kL0_SlowdownWritesTrigger) {
+        versions_->NumLevelFiles(0) >= config::kL0_SlowdownWritesTrigger) {//DHQ: level0 file过多，需要delay
       // We are getting close to hitting a hard limit on the number of
       // L0 files.  Rather than delaying a single write by several
       // seconds when we hit the hard limit, start delaying each
@@ -1349,10 +1349,10 @@ Status DBImpl::MakeRoomForWrite(bool force) {
       allow_delay = false;  // Do not delay a single write more than once
       mutex_.Lock();
     } else if (!force &&
-               (mem_->ApproximateMemoryUsage() <= options_.write_buffer_size)) {
+               (mem_->ApproximateMemoryUsage() <= options_.write_buffer_size)) {//DHQ: 当前memtable有空间
       // There is room in current memtable
       break;
-    } else if (imm_ != nullptr) {
+    } else if (imm_ != nullptr) {//DHQ: mem_ 没空间，imm_ 还没 compact 完成(只能一个imm_)
       // We have filled up the current memtable, but the previous
       // one is still being compacted, so we wait.
       Log(options_.info_log, "Current memtable full; waiting...\n");
@@ -1360,7 +1360,7 @@ Status DBImpl::MakeRoomForWrite(bool force) {
     } else if (versions_->NumLevelFiles(0) >= config::kL0_StopWritesTrigger) {
       // There are too many level-0 files.
       Log(options_.info_log, "Too many L0 files; waiting...\n");
-      background_work_finished_signal_.Wait();
+      background_work_finished_signal_.Wait();//DHQ: 必须等待，长期wait去了
     } else {
       // Attempt to switch to a new memtable and trigger compaction of old
       assert(versions_->PrevLogNumber() == 0);
@@ -1434,7 +1434,7 @@ bool DBImpl::GetProperty(const Slice& property, std::string* value) {
       }
     }
     return true;
-  } else if (in == "sstables") {
+  } else if (in == "sstables") {//DHQ: property已经包含所有SST的信息
     *value = versions_->current()->DebugString();
     return true;
   } else if (in == "approximate-memory-usage") {
@@ -1455,7 +1455,7 @@ bool DBImpl::GetProperty(const Slice& property, std::string* value) {
   return false;
 }
 
-void DBImpl::GetApproximateSizes(
+void DBImpl::GetApproximateSizes(//DHQ: 获取多个 Range的大小
     const Range* range, int n,
     uint64_t* sizes) {
   // TODO(opt): better implementation
@@ -1506,7 +1506,7 @@ Status DB::Open(const Options& options, const std::string& dbname,
   VersionEdit edit;
   // Recover handles create_if_missing, error_if_exists
   bool save_manifest = false;
-  Status s = impl->Recover(&edit, &save_manifest);
+  Status s = impl->Recover(&edit, &save_manifest);//DHQ: Recover VersionSet inside
   if (s.ok() && impl->mem_ == nullptr) {
     // Create new log and a corresponding memtable.
     uint64_t new_log_number = impl->versions_->NewFileNumber();

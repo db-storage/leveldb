@@ -50,7 +50,7 @@ Status BuildTable(const std::string& dbname,
 
     // Finish and check for file errors
     if (s.ok()) {
-      s = file->Sync();
+      s = file->Sync();//DHQ: Write finished
     }
     if (s.ok()) {
       s = file->Close();
