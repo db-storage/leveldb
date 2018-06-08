@@ -1207,7 +1207,7 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* my_batch) {
   w.done = false;
 
   MutexLock l(&mutex_);
-  writers_.push_back(&w); //DHQ: 并发的Write，公用writers，然后一起打包成同一个log record
+  writers_.push_back(&w); //DHQ: 并发的Write，公用writers_，然后一起打包成同一个log record
   while (!w.done && &w != writers_.front()) {//DHQ: Front的负责写log
     w.cv.Wait();
   }
@@ -1220,7 +1220,7 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* my_batch) {
   uint64_t last_sequence = versions_->LastSequence();
   Writer* last_writer = &w;
   if (status.ok() && my_batch != nullptr) {  // nullptr batch is for compactions
-    WriteBatch* updates = BuildBatchGroup(&last_writer);
+    WriteBatch* updates = BuildBatchGroup(&last_writer);//DHQ: 从 writers_ 构建 updates
     WriteBatchInternal::SetSequence(updates, last_sequence + 1);
     last_sequence += WriteBatchInternal::Count(updates);
 
@@ -1230,10 +1230,10 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* my_batch) {
     // into mem_.
     {
       mutex_.Unlock();
-      status = log_->AddRecord(WriteBatchInternal::Contents(updates));
+      status = log_->AddRecord(WriteBatchInternal::Contents(updates));//DHQ: log中加入记录
       bool sync_error = false;
       if (status.ok() && options.sync) {
-        status = logfile_->Sync();
+        status = logfile_->Sync(); //DHQ： 根据设置，是否做 sync
         if (!status.ok()) {
           sync_error = true;
         }
@@ -1297,7 +1297,7 @@ WriteBatch* DBImpl::BuildBatchGroup(Writer** last_writer) {
   ++iter;  // Advance past "first"
   for (; iter != writers_.end(); ++iter) {
     Writer* w = *iter;
-    if (w->sync && !first->sync) {
+    if (w->sync && !first->sync) {//DHQ: 区分 sync和非 sync的请求. sync的 先打包。这个啥粒度？
       // Do not include a sync write into a batch handled by a non-sync write.
       break;
     }
