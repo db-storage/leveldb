@@ -13,7 +13,7 @@
 #include "leveldb/iterator.h"
 
 namespace leveldb {
-
+//DHQ：这个实际上用于从 imm_写。level-0，不存在多层合并的问题
 Status BuildTable(const std::string& dbname,
                   Env* env,
                   const Options& options,
@@ -32,12 +32,12 @@ Status BuildTable(const std::string& dbname,
       return s;
     }
 
-    TableBuilder* builder = new TableBuilder(options, file);
+    TableBuilder* builder = new TableBuilder(options, file); //DHQ ： file传入
     meta->smallest.DecodeFrom(iter->key());
     for (; iter->Valid(); iter->Next()) {
       Slice key = iter->key();
       meta->largest.DecodeFrom(key);
-      builder->Add(key, iter->value());
+      builder->Add(key, iter->value()); //DHQ: Key/val Add进去
     }
 
     // Finish and check for builder errors

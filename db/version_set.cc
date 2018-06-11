@@ -498,27 +498,27 @@ bool Version::OverlapInLevel(int level,
   return SomeFileOverlapsRange(vset_->icmp_, (level > 0), files_[level],
                                smallest_user_key, largest_user_key);
 }
-
+//DHQ: 这个是决定把 compact memtable生成的文件放到哪一层,根据 range判断各层的重合的文件大小 
 int Version::PickLevelForMemTableOutput(
     const Slice& smallest_user_key,
     const Slice& largest_user_key) {
   int level = 0;
-  if (!OverlapInLevel(0, &smallest_user_key, &largest_user_key)) {
+  if (!OverlapInLevel(0, &smallest_user_key, &largest_user_key)) {//DHQ: 如果跟 level 0没有重合，才需要往其他层判断
     // Push to next level if there is no overlap in next level,
     // and the #bytes overlapping in the level after that are limited.
     InternalKey start(smallest_user_key, kMaxSequenceNumber, kValueTypeForSeek);
     InternalKey limit(largest_user_key, 0, static_cast<ValueType>(0));
     std::vector<FileMetaData*> overlaps;
     while (level < config::kMaxMemCompactLevel) {
-      if (OverlapInLevel(level + 1, &smallest_user_key, &largest_user_key)) {
-        break;
+      if (OverlapInLevel(level + 1, &smallest_user_key, &largest_user_key)) {//DHQ: 看与 level+1 是否有重合
+        break; //DHQ：如果重合，不能再下沉
       }
-      if (level + 2 < config::kNumLevels) {
+      if (level + 2 < config::kNumLevels) {//DHQ: 检查与 level+2的重合
         // Check that file does not overlap too many grandparent bytes.
-        GetOverlappingInputs(level + 2, &start, &limit, &overlaps);
-        const int64_t sum = TotalFileSize(overlaps);
-        if (sum > MaxGrandParentOverlapBytes(vset_->options_)) {
-          break;
+        GetOverlappingInputs(level + 2, &start, &limit, &overlaps);//DHQ: 计算过程中，可能会引起start, limit被修改(扩大)
+        const int64_t sum = TotalFileSize(overlaps); 
+        if (sum > MaxGrandParentOverlapBytes(vset_->options_)) {//DHQ: 即使与level+1不overlap，与 level+2的重合，也不能超过限制
+          break; //DHQ: 因为overlap太多，会导致 compact当时开销太大，还不如暂时不下沉，快速结束。
         }
       }
       level++;
@@ -528,8 +528,8 @@ int Version::PickLevelForMemTableOutput(
 }
 
 // Store in "*inputs" all files in "level" that overlap [begin,end]
-void Version::GetOverlappingInputs(
-    int level,
+void Version::GetOverlappingInputs(//DHQ: 对于 level-n 和 level-n+1分别调用, MaxNextLevelOverlappingBytes里面获得 level-n+1的
+    int level, //DHQ: begin和 end，不一定属于一个file，包括 level-n也如此
     const InternalKey* begin,
     const InternalKey* end,
     std::vector<FileMetaData*>* inputs) {
@@ -544,20 +544,20 @@ void Version::GetOverlappingInputs(
     user_end = end->user_key();
   }
   const Comparator* user_cmp = vset_->icmp_.user_comparator();
-  for (size_t i = 0; i < files_[level].size(); ) {
+  for (size_t i = 0; i < files_[level].size(); ) {//DHQ: TODO: 这个到底是 level-n，还是level-n+1? 还是分别计算？ 
     FileMetaData* f = files_[level][i++];
     const Slice file_start = f->smallest.user_key();
     const Slice file_limit = f->largest.user_key();
-    if (begin != nullptr && user_cmp->Compare(file_limit, user_begin) < 0) {
+    if (begin != nullptr && user_cmp->Compare(file_limit, user_begin) < 0) {//DHQ: 完全小于begin
       // "f" is completely before specified range; skip it
-    } else if (end != nullptr && user_cmp->Compare(file_start, user_end) > 0) {
+    } else if (end != nullptr && user_cmp->Compare(file_start, user_end) > 0) {//DHQ： 完全大于end
       // "f" is completely after specified range; skip it
     } else {
       inputs->push_back(f);
       if (level == 0) {
         // Level-0 files may overlap each other.  So check if the newly
         // added file has expanded the range.  If so, restart search.
-        if (begin != nullptr && user_cmp->Compare(file_start, user_begin) < 0) {
+        if (begin != nullptr && user_cmp->Compare(file_start, user_begin) < 0) {//DHQ: Level0，根据 file的范围，扩充 user_begin 和 user_end
           user_begin = file_start;
           inputs->clear();
           i = 0;
@@ -845,11 +845,11 @@ Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
   // a temporary file that contains a snapshot of the current version.
   std::string new_manifest_file;
   Status s;
-  if (descriptor_log_ == nullptr) {
+  if (descriptor_log_ == nullptr) {//DHQ: 没有 descriptor_log_，先写增量，后续还会写 AddRecord，增量
     // No reason to unlock *mu here since we only hit this path in the
     // first call to LogAndApply (when opening the database).
     assert(descriptor_file_ == nullptr);
-    new_manifest_file = DescriptorFileName(dbname_, manifest_file_number_);
+    new_manifest_file = DescriptorFileName(dbname_, manifest_file_number_); //DHQ: 新建 new_manifest_file
     edit->SetNextFile(next_file_number_);
     s = env_->NewWritableFile(new_manifest_file, &descriptor_file_);
     if (s.ok()) {
@@ -878,7 +878,7 @@ Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
     // If we just created a new descriptor file, install it by writing a
     // new CURRENT file that points to it.
     if (s.ok() && !new_manifest_file.empty()) {
-      s = SetCurrentFile(env_, dbname_, manifest_file_number_);
+      s = SetCurrentFile(env_, dbname_, manifest_file_number_); //DHQ: 新建了 new_manifest_file，则需要修改 CURRENT
     }
 
     mu->Lock();
@@ -886,7 +886,7 @@ Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
 
   // Install the new version
   if (s.ok()) {
-    AppendVersion(v);
+    AppendVersion(v); //DHQ： 加入到内存的。version list
     log_number_ = edit->log_number_;
     prev_log_number_ = edit->prev_log_number_;
   } else {
@@ -902,8 +902,8 @@ Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
 
   return s;
 }
-
-Status VersionSet::Recover(bool *save_manifest) {
+//DHQ: 这个Recover，就是从 CURRENT里面读取最新的 Manifest file，没有去扫描所有的Manifest文件。不过VersionSet里面有 log_number_，last_sequence 
+Status VersionSet::Recover(bool *save_manifest) {//DHQ: 所以，可以根据WAL再去找到其他的数据，但是这不是最优的，而且可能有CURRENT不完整的情况
   struct LogReporter : public log::Reader::Reporter {
     Status* status;
     virtual void Corruption(size_t bytes, const Status& s) {
@@ -990,7 +990,7 @@ Status VersionSet::Recover(bool *save_manifest) {
   file = nullptr;
 
   if (s.ok()) {
-    if (!have_next_file) {//DHQ: 至少有一个全量版本，有next_file, log_number等
+    if (!have_next_file) {//DHQ: 至少有一个全量版本，有 next_file, log_number等
       s = Status::Corruption("no meta-nextfile entry in descriptor");
     } else if (!have_log_number) {
       s = Status::Corruption("no meta-lognumber entry in descriptor");
@@ -1011,7 +1011,7 @@ Status VersionSet::Recover(bool *save_manifest) {
     builder.SaveTo(v);
     // Install recovered version
     Finalize(v);
-    AppendVersion(v);
+    AppendVersion(v); //DHQ: 内存中操作，记录 version 链表
     manifest_file_number_ = next_file; //DHQ：预留给Manifest file 的number，但是实际上不一定会写 manifest，可能 ReuseManifest
     next_file_number_ = next_file + 1;
     last_sequence_ = last_sequence;
@@ -1206,7 +1206,7 @@ int64_t VersionSet::NumLevelBytes(int level) const {
   return TotalFileSize(current_->files_[level]);
 }
 
-int64_t VersionSet::MaxNextLevelOverlappingBytes() {
+int64_t VersionSet::MaxNextLevelOverlappingBytes() {//DHQ: 这个是下一个level的
   int64_t result = 0;
   std::vector<FileMetaData*> overlaps;
   for (int level = 1; level < config::kNumLevels - 1; level++) {
@@ -1407,13 +1407,13 @@ void VersionSet::SetupOtherInputs(Compaction* c) {
   compact_pointer_[level] = largest.Encode().ToString();
   c->edit_.SetCompactPointer(level, largest);
 }
-
+//DHQ: 返回一个compaction
 Compaction* VersionSet::CompactRange(
     int level,
     const InternalKey* begin,
     const InternalKey* end) {
   std::vector<FileMetaData*> inputs;
-  current_->GetOverlappingInputs(level, begin, end, &inputs);
+  current_->GetOverlappingInputs(level, begin, end, &inputs); //DHQ: inputs， 应该是下一个 level的
   if (inputs.empty()) {
     return nullptr;
   }
@@ -1422,7 +1422,7 @@ Compaction* VersionSet::CompactRange(
   // But we cannot do this for level-0 since level-0 files can overlap
   // and we must not pick one file and drop another older file if the
   // two files overlap.
-  if (level > 0) {
+  if (level > 0) { //DHQ: 只是为了减少一次compact的文件个数而已。不希望一次读写太多
     const uint64_t limit = MaxFileSizeForLevel(options_, level);
     uint64_t total = 0;
     for (size_t i = 0; i < inputs.size(); i++) {

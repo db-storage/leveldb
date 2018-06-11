@@ -36,7 +36,7 @@ namespace {
 // combines multiple entries for the same userkey found in the DB
 // representation into a single entry while accounting for sequence
 // numbers, deletion markers, overwrites, etc.
-class DBIter: public Iterator {
+class DBIter: public Iterator {//DHQ: 上面提到了 “multiple entries for the same userkey ”，Iter是能看到同一个 userkey的多个 k/v的
  public:
   // Which direction is the iterator currently moving?
   // (1) When moving forward, the internal iterator is positioned at

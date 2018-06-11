@@ -62,7 +62,7 @@ static inline const char* DecodeEntry(const char* p, const char* limit,
     // Fast path: all three values are encoded in one byte each
     p += 3;
   } else {
-    if ((p = GetVarint32Ptr(p, limit, shared)) == nullptr) return nullptr;
+    if ((p = GetVarint32Ptr(p, limit, shared)) == nullptr) return nullptr; //DHQ: 用返回值修改p
     if ((p = GetVarint32Ptr(p, limit, non_shared)) == nullptr) return nullptr;
     if ((p = GetVarint32Ptr(p, limit, value_length)) == nullptr) return nullptr;
   }

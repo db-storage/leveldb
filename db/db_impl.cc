@@ -503,7 +503,7 @@ Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit,
 
   Status s;
   {
-    mutex_.Unlock();//DHQ: unlock first, it is time consuming
+    mutex_.Unlock();//DHQ: 先unlock, it is time consuming
     s = BuildTable(dbname_, env_, options_, table_cache_, iter, &meta); //DHQ: write file inside
     mutex_.Lock();//Lock again
   }
@@ -544,7 +544,7 @@ void DBImpl::CompactMemTable() {
   VersionEdit edit;
   Version* base = versions_->current();
   base->Ref();//DHQ: not holding the lock all the time during WriteLevel0Table, so needs Ref
-  Status s = WriteLevel0Table(imm_, &edit, base);
+  Status s = WriteLevel0Table(imm_, &edit, base); //DHQ ： imm_ 写入level 0，不涉及多层合并
   base->Unref();
 
   if (s.ok() && shutting_down_.Acquire_Load()) {
@@ -692,7 +692,7 @@ void DBImpl::BackgroundCall() {
 void DBImpl::BackgroundCompaction() {
   mutex_.AssertHeld();
 
-  if (imm_ != nullptr) {
+  if (imm_ != nullptr) {//DHQ: 优先 mem table，因为它可能会阻塞用户写
     CompactMemTable();
     return;
   }
@@ -701,7 +701,7 @@ void DBImpl::BackgroundCompaction() {
   bool is_manual = (manual_compaction_ != nullptr);
   InternalKey manual_end;
   if (is_manual) {
-    ManualCompaction* m = manual_compaction_;
+    ManualCompaction* m = manual_compaction_; //DHQ： 被compact的level, range信息而已
     c = versions_->CompactRange(m->level, m->begin, m->end);
     m->done = (c == nullptr);
     if (c != nullptr) {
@@ -927,7 +927,7 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
       if (imm_ != nullptr) {
         CompactMemTable();
         // Wake up MakeRoomForWrite() if necessary.
-        background_work_finished_signal_.SignalAll();
+        background_work_finished_signal_.SignalAll(); //DHQ: MemTable compaction后，imm_ 为空，可以唤醒 MakeRoomForWrite
       }
       mutex_.Unlock();
       imm_micros += (env_->NowMicros() - imm_start);
@@ -1079,28 +1079,28 @@ static void CleanupIteratorState(void* arg1, void* arg2) {
 Iterator* DBImpl::NewInternalIterator(const ReadOptions& options,
                                       SequenceNumber* latest_snapshot,
                                       uint32_t* seed) {
-  mutex_.Lock();
-  *latest_snapshot = versions_->LastSequence();
+  mutex_.Lock(); //DHQ: 先获得 lock，这样 sequence 与 current 也是一致的
+  *latest_snapshot = versions_->LastSequence();//DHQ: 先获取 snapshot number
 
   // Collect together all needed child iterators
   std::vector<Iterator*> list;
-  list.push_back(mem_->NewIterator());
-  mem_->Ref();
+  list.push_back(mem_->NewIterator()); //DHQ: memtable 的 iter，先放到 list
+  mem_->Ref(); //DHQ: mem_, imm_, current，都做了Ref，上面的cleanup，要 Unref
   if (imm_ != nullptr) {
-    list.push_back(imm_->NewIterator());
+    list.push_back(imm_->NewIterator()); //DHQ: imm 的 iter, 放到 list
     imm_->Ref();
   }
-  versions_->current()->AddIterators(options, &list);
+  versions_->current()->AddIterators(options, &list); //DHQ: VersionSet的iters (应该每个level都有)，加入list
   Iterator* internal_iter =
-      NewMergingIterator(&internal_comparator_, &list[0], list.size());
+      NewMergingIterator(&internal_comparator_, &list[0], list.size()); //DHQ: 创建一个 Merging Iter
   versions_->current()->Ref();
 
-  IterState* cleanup = new IterState(&mutex_, mem_, imm_, versions_->current());
+  IterState* cleanup = new IterState(&mutex_, mem_, imm_, versions_->current()); //DHQ: 创建了一个用于 cleanup的 IterState
   internal_iter->RegisterCleanup(CleanupIteratorState, cleanup, nullptr);
 
   *seed = ++seed_;
   mutex_.Unlock();
-  return internal_iter;
+  return internal_iter; //DHQ: 返回一个 iter list的 iter
 }
 
 Iterator* DBImpl::TEST_NewInternalIterator() {
@@ -1356,12 +1356,12 @@ Status DBImpl::MakeRoomForWrite(bool force) {
       // We have filled up the current memtable, but the previous
       // one is still being compacted, so we wait.
       Log(options_.info_log, "Current memtable full; waiting...\n");
-      background_work_finished_signal_.Wait();
+      background_work_finished_signal_.Wait(); //DHQ: 等待 CompactMemTable 完成后的signal。CompactMemTable 后，imm_ 实际上为空
     } else if (versions_->NumLevelFiles(0) >= config::kL0_StopWritesTrigger) {
       // There are too many level-0 files.
       Log(options_.info_log, "Too many L0 files; waiting...\n");
       background_work_finished_signal_.Wait();//DHQ: 必须等待，长期wait去了
-    } else {
+    } else {//DHQ: imm_ 为空，那么可以把 mem_ 转变为 imm_，然后写新的 mem_
       // Attempt to switch to a new memtable and trigger compaction of old
       assert(versions_->PrevLogNumber() == 0);
       uint64_t new_log_number = versions_->NewFileNumber();
@@ -1378,7 +1378,7 @@ Status DBImpl::MakeRoomForWrite(bool force) {
       logfile_number_ = new_log_number;
       log_ = new log::Writer(lfile);
       imm_ = mem_;
-      has_imm_.Release_Store(imm_);
+      has_imm_.Release_Store(imm_); //DHQ: 有 Barrier的 Store
       mem_ = new MemTable(internal_comparator_);
       mem_->Ref();
       force = false;   // Do not force another compaction if have room
@@ -1397,7 +1397,7 @@ bool DBImpl::GetProperty(const Slice& property, std::string* value) {
   if (!in.starts_with(prefix)) return false;
   in.remove_prefix(prefix.size());
 
-  if (in.starts_with("num-files-at-level")) {
+  if (in.starts_with("num-files-at-level")) {//DHQ: db_->GetProperty("leveldb.num-files-at-level" + NumberToString(level),...
     in.remove_prefix(strlen("num-files-at-level"));
     uint64_t level;
     bool ok = ConsumeDecimalNumber(&in, &level) && in.empty();
@@ -1470,7 +1470,7 @@ void DBImpl::GetApproximateSizes(//DHQ: 获取多个 Range的大小
     // Convert user_key into a corresponding internal key.
     InternalKey k1(range[i].start, kMaxSequenceNumber, kValueTypeForSeek);
     InternalKey k2(range[i].limit, kMaxSequenceNumber, kValueTypeForSeek);
-    uint64_t start = versions_->ApproximateOffsetOf(v, k1);
+    uint64_t start = versions_->ApproximateOffsetOf(v, k1);//DHQ: 两个近似 offset的差，作为近似 Size
     uint64_t limit = versions_->ApproximateOffsetOf(v, k2);
     sizes[i] = (limit >= start ? limit - start : 0);
   }
@@ -1507,7 +1507,7 @@ Status DB::Open(const Options& options, const std::string& dbname,
   // Recover handles create_if_missing, error_if_exists
   bool save_manifest = false;
   Status s = impl->Recover(&edit, &save_manifest);//DHQ: Recover VersionSet inside
-  if (s.ok() && impl->mem_ == nullptr) {
+  if (s.ok() && impl->mem_ == nullptr) {//DHQ: when will impl->mem_ be non-null?  what will logfile be?
     // Create new log and a corresponding memtable.
     uint64_t new_log_number = impl->versions_->NewFileNumber();
     WritableFile* lfile;

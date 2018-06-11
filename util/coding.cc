@@ -44,14 +44,14 @@ void PutFixed64(std::string* dst, uint64_t value) {
   dst->append(buf, sizeof(buf));
 }
 
-char* EncodeVarint32(char* dst, uint32_t v) {
+char* EncodeVarint32(char* dst, uint32_t v) {//DHQ: 实际上每个字节的最高 bit，被用来表示下一个字节是否有效了。每个字节只用了7个
   // Operate on characters as unsigneds
   unsigned char* ptr = reinterpret_cast<unsigned char*>(dst);
   static const int B = 128;
-  if (v < (1<<7)) {
+  if (v < (1<<7)) { //DHQ: 小于 128，一个字节搞定
     *(ptr++) = v;
-  } else if (v < (1<<14)) {
-    *(ptr++) = v | B;
+  } else if (v < (1<<14)) {//DHQ: [1<<7, 1<<14)之间
+    *(ptr++) = v | B;  //DHQ: 先 或上 1<<7 (128)
     *(ptr++) = v>>7;
   } else if (v < (1<<21)) {
     *(ptr++) = v | B;
@@ -62,7 +62,7 @@ char* EncodeVarint32(char* dst, uint32_t v) {
     *(ptr++) = (v>>7) | B;
     *(ptr++) = (v>>14) | B;
     *(ptr++) = v>>21;
-  } else {
+  } else { //DHQ: 这种情况下，用了5个字节，虽然本来是 4个
     *(ptr++) = v | B;
     *(ptr++) = (v>>7) | B;
     *(ptr++) = (v>>14) | B;

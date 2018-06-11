@@ -71,7 +71,7 @@ class Repairer {
     Status status = FindFiles();
     if (status.ok()) {
       ConvertLogFilesToTables();
-      ExtractMetaData();
+      ExtractMetaData(); //DHQ: 获取各个SST的基本信息，比如key range，然后写 Descriptor
       status = WriteDescriptor();
     }
     if (status.ok()) {
@@ -421,7 +421,7 @@ class Repairer {
       }
 
       // Install new manifest
-      status = env_->RenameFile(tmp, DescriptorFileName(dbname_, 1));
+      status = env_->RenameFile(tmp, DescriptorFileName(dbname_, 1));//DHQ: tmp变成 1，然后将 1设置成 Current
       if (status.ok()) {
         status = SetCurrentFile(env_, dbname_, 1);
       } else {
