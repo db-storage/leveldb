@@ -162,14 +162,14 @@ inline int InternalKeyComparator::Compare(
     const InternalKey& a, const InternalKey& b) const {
   return Compare(a.Encode(), b.Encode());
 }
-
+//DHQ：返回true，代表解析结果正确
 inline bool ParseInternalKey(const Slice& internal_key,
-                             ParsedInternalKey* result) {
+                             ParsedInternalKey* result) {//
   const size_t n = internal_key.size();
   if (n < 8) return false;
-  uint64_t num = DecodeFixed64(internal_key.data() + n - 8);
-  unsigned char c = num & 0xff;
-  result->sequence = num >> 8;
+  uint64_t num = DecodeFixed64(internal_key.data() + n - 8); //DHQ: seq和 type 共用64bit
+  unsigned char c = num & 0xff; //DHQ：一个字节是 type
+  result->sequence = num >> 8;  //DHQ: sequence是7字节
   result->type = static_cast<ValueType>(c);
   result->user_key = Slice(internal_key.data(), n - 8);
   return (c <= static_cast<unsigned char>(kTypeValue));

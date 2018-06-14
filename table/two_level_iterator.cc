@@ -112,7 +112,7 @@ void TwoLevelIterator::SeekToLast() {
 void TwoLevelIterator::Next() {
   assert(Valid());
   data_iter_.Next();
-  SkipEmptyDataBlocksForward();
+  SkipEmptyDataBlocksForward();//DHQ: 这个函数内判断并可能调用 index_iter_的函数，保证下次 data_iter_操作是有效的。有可能会换block
 }
 
 void TwoLevelIterator::Prev() {

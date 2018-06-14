@@ -1268,27 +1268,27 @@ Iterator* VersionSet::MakeInputIterator(Compaction* c) {
   // Level-0 files have to be merged together.  For other levels,
   // we will make a concatenating iterator per level.
   // TODO(opt): use concatenating iterator for level-0 if there is no overlap
-  const int space = (c->level() == 0 ? c->inputs_[0].size() + 1 : 2);
+  const int space = (c->level() == 0 ? c->inputs_[0].size() + 1 : 2); //DHQ: 如果c->level()是0，那么c->inputs_[0].size() 是 level-0的file数量
   Iterator** list = new Iterator*[space];
   int num = 0;
-  for (int which = 0; which < 2; which++) {
+  for (int which = 0; which < 2; which++) {//DHQ: 只会compaction 两层。which从 0 - 1
     if (!c->inputs_[which].empty()) {
-      if (c->level() + which == 0) {
+      if (c->level() + which == 0) {//DHQ: c->level() = 0，说明compaction包含level-0. c->level() + which 表面当前是level-0
         const std::vector<FileMetaData*>& files = c->inputs_[which];
         for (size_t i = 0; i < files.size(); i++) {
-          list[num++] = table_cache_->NewIterator(
+          list[num++] = table_cache_->NewIterator(//DHQ: level-0, 每个file，一个Iterator
               options, files[i]->number, files[i]->file_size);
         }
       } else {
         // Create concatenating iterator for the files from this level
-        list[num++] = NewTwoLevelIterator(
-            new Version::LevelFileNumIterator(icmp_, &c->inputs_[which]),
+        list[num++] = NewTwoLevelIterator(  //DHQ: 非 level-0，一个level一个iter即可，因为file间不重合
+            new Version::LevelFileNumIterator(icmp_, &c->inputs_[which]), //DHQ: Two level是因为 file内部有 index和data
             &GetFileIterator, table_cache_, options);
       }
     }
   }
   assert(num <= space);
-  Iterator* result = NewMergingIterator(&icmp_, list, num);
+  Iterator* result = NewMergingIterator(&icmp_, list, num); //DHQ: 所有 iter 构成一个MergingIter
   delete[] list;
   return result;
 }
@@ -1478,7 +1478,7 @@ void Compaction::AddInputDeletions(VersionEdit* edit) {
     }
   }
 }
-
+//DHQ: 感觉这个函数，不是准确判断。判断有的，不一定有。判断没有的，一定没有？
 bool Compaction::IsBaseLevelForKey(const Slice& user_key) {
   // Maybe use binary search to find right entry instead of linear search?
   const Comparator* user_cmp = input_version_->vset_->icmp_.user_comparator();
