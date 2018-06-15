@@ -528,7 +528,7 @@ int Version::PickLevelForMemTableOutput(
 }
 
 // Store in "*inputs" all files in "level" that overlap [begin,end]
-void Version::GetOverlappingInputs(//DHQ: 对于 level-n 和 level-n+1分别调用, MaxNextLevelOverlappingBytes里面获得 level-n+1的
+void Version::GetOverlappingInputs(//DHQ: 对于 level-n 和 level-n+1分别调用, MaxNextLevelOverlappingBytes 里面获得 level-n+1的
     int level, //DHQ: begin和 end，不一定属于一个file，包括 level-n也如此
     const InternalKey* begin,
     const InternalKey* end,
@@ -552,7 +552,7 @@ void Version::GetOverlappingInputs(//DHQ: 对于 level-n 和 level-n+1分别调�
       // "f" is completely before specified range; skip it
     } else if (end != nullptr && user_cmp->Compare(file_start, user_end) > 0) {//DHQ： 完全大于end
       // "f" is completely after specified range; skip it
-    } else {
+    } else {//DHQ: TODO: f 可能并不产生重叠，只是user_begin，user_end 的范围太泛了，导致被选中。
       inputs->push_back(f);
       if (level == 0) {
         // Level-0 files may overlap each other.  So check if the newly
