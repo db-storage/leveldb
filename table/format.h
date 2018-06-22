@@ -95,7 +95,7 @@ Status ReadBlock(RandomAccessFile* file,
                  const ReadOptions& options,
                  const BlockHandle& handle,
                  BlockContents* result);
-
+//DHQ: 读入Block
 // Implementation details follow.  Clients should ignore,
 
 inline BlockHandle::BlockHandle()
