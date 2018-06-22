@@ -488,7 +488,7 @@ void Version::Unref() {
   assert(refs_ >= 1);
   --refs_;
   if (refs_ == 0) {
-    delete this;
+    delete this; //DHQ: Unref可能删除
   }
 }
 
@@ -800,7 +800,7 @@ VersionSet::~VersionSet() {
   delete descriptor_log_;
   delete descriptor_file_;
 }
-
+//DHQ: 追加一个新的version
 void VersionSet::AppendVersion(Version* v) {
   // Make "v" current
   assert(v->refs_ == 0);
@@ -817,7 +817,7 @@ void VersionSet::AppendVersion(Version* v) {
   v->prev_->next_ = v;
   v->next_->prev_ = v;
 }
-
+//DHQ: VersionEdit 记log，并 调用AppendVersion  apply 到 VersionSet
 Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
   if (edit->has_log_number_) {
     assert(edit->log_number_ >= log_number_);
@@ -837,7 +837,7 @@ Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
   {
     Builder builder(this, current_);
     builder.Apply(edit);
-    builder.SaveTo(v);
+    builder.SaveTo(v); //DHQ: 内存中的新 version，注意这只是个局部变量，AppendVersion()才使它生效
   }
   Finalize(v);
 
@@ -845,7 +845,7 @@ Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
   // a temporary file that contains a snapshot of the current version.
   std::string new_manifest_file;
   Status s;
-  if (descriptor_log_ == nullptr) {//DHQ: 没有 descriptor_log_，先写增量，后续还会写 AddRecord，增量
+  if (descriptor_log_ == nullptr) {//DHQ: 没有 descriptor_log_ ，先写增量，后续还会写 AddRecord，增量
     // No reason to unlock *mu here since we only hit this path in the
     // first call to LogAndApply (when opening the database).
     assert(descriptor_file_ == nullptr);
@@ -877,7 +877,7 @@ Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
 
     // If we just created a new descriptor file, install it by writing a
     // new CURRENT file that points to it.
-    if (s.ok() && !new_manifest_file.empty()) {
+    if (s.ok() && !new_manifest_file.empty()) {//DHQ: 这个只有当产生了新的 descriptor file后才修改
       s = SetCurrentFile(env_, dbname_, manifest_file_number_); //DHQ: 新建了 new_manifest_file，则需要修改 CURRENT
     }
 
@@ -886,7 +886,7 @@ Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
 
   // Install the new version
   if (s.ok()) {
-    AppendVersion(v); //DHQ： 加入到内存的。version list
+    AppendVersion(v); //DHQ： v 加入到内存的version list，变成了 current_
     log_number_ = edit->log_number_;
     prev_log_number_ = edit->prev_log_number_;
   } else {
@@ -902,7 +902,7 @@ Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
 
   return s;
 }
-//DHQ: 这个Recover，就是从 CURRENT里面读取最新的 Manifest file，没有去扫描所有的Manifest文件。不过VersionSet里面有 log_number_，last_sequence 
+//DHQ: 这个Recover，就是从 CURRENT 里面读取最新的 Manifest file，没有去扫描所有的Manifest文件。不过VersionSet里面有 log_number_，last_sequence 
 Status VersionSet::Recover(bool *save_manifest) {//DHQ: 所以，可以根据WAL再去找到其他的数据，但是这不是最优的，而且可能有CURRENT不完整的情况
   struct LogReporter : public log::Reader::Reporter {
     Status* status;
@@ -1065,7 +1065,7 @@ void VersionSet::MarkFileNumberUsed(uint64_t number) {
     next_file_number_ = number + 1;
   }
 }
-
+//DHQ: 计算 version的 compaction_score_ 和 compaction_level_
 void VersionSet::Finalize(Version* v) {
   // Precomputed best level for next compaction
   int best_level = -1;
@@ -1103,7 +1103,7 @@ void VersionSet::Finalize(Version* v) {
   v->compaction_level_ = best_level;
   v->compaction_score_ = best_score;
 }
-
+//DHQ: 这个是为了写个全量版本，每次产生新的 Manifest，都要写 snapshot。
 Status VersionSet::WriteSnapshot(log::Writer* log) {
   // TODO: Break up into multiple records to reduce memory usage on recovery?
 
@@ -1293,7 +1293,7 @@ Iterator* VersionSet::MakeInputIterator(Compaction* c) {
   return result;
 }
 
-Compaction* VersionSet::PickCompaction() {
+Compaction* VersionSet::PickCompaction() {//DHQ: 
   Compaction* c;
   int level;
 
@@ -1328,8 +1328,8 @@ Compaction* VersionSet::PickCompaction() {
     return nullptr;
   }
 
-  c->input_version_ = current_;
-  c->input_version_->Ref();
+  c->input_version_ = current_; //DHQ: 当前 Version
+  c->input_version_->Ref(); //DHQ: 获取ref
 
   // Files in level 0 may overlap each other, so pick up all overlapping ones
   if (level == 0) {
@@ -1460,7 +1460,7 @@ Compaction::~Compaction() {
     input_version_->Unref();
   }
 }
-
+//DHQ: leveln-n就一个file, level-n+1 0 个，并且跟 level-n+2重合很少，那么就可以直接move到下一层。最后的判断，时防止 n+1和 n+2 merge时，巨大的合并量
 bool Compaction::IsTrivialMove() const {
   const VersionSet* vset = input_version_->vset_;
   // Avoid a move if there is lots of overlapping grandparent data.
@@ -1482,7 +1482,7 @@ void Compaction::AddInputDeletions(VersionEdit* edit) {
 bool Compaction::IsBaseLevelForKey(const Slice& user_key) {
   // Maybe use binary search to find right entry instead of linear search?
   const Comparator* user_cmp = input_version_->vset_->icmp_.user_comparator();
-  for (int lvl = level_ + 2; lvl < config::kNumLevels; lvl++) {
+  for (int lvl = level_ + 2; lvl < config::kNumLevels; lvl++) { //DHQ: 从 level+2开始找
     const std::vector<FileMetaData*>& files = input_version_->files_[lvl];
     for (; level_ptrs_[lvl] < files.size(); ) {
       FileMetaData* f = files[level_ptrs_[lvl]];

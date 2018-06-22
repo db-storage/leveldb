@@ -37,7 +37,7 @@ namespace {
 // representation into a single entry while accounting for sequence
 // numbers, deletion markers, overwrites, etc.
 class DBIter: public Iterator {//DHQ: 上面提到了 “multiple entries for the same userkey ”，Iter是能看到同一个 userkey的多个 k/v的
- public:
+ public: //DHQ: DBIter 主要是个封装 Reverse，snapshot这些逻辑，InternalIterator，不管这些逻辑，只有简单的遍历
   // Which direction is the iterator currently moving?
   // (1) When moving forward, the internal iterator is positioned at
   //     the exact entry that yields this->key(), this->value()
@@ -110,7 +110,7 @@ class DBIter: public Iterator {//DHQ: 上面提到了 “multiple entries for th
 
   DBImpl* db_;
   const Comparator* const user_comparator_;
-  Iterator* const iter_;
+  Iterator* const iter_; //DHQ: 这个是个 internal iter
   SequenceNumber const sequence_;
 
   Status status_;
@@ -135,7 +135,7 @@ inline bool DBIter::ParseKey(ParsedInternalKey* ikey) {
     bytes_counter_ += RandomPeriod();
     db_->RecordReadSample(k);
   }
-  if (!ParseInternalKey(k, ikey)) {
+  if (!ParseInternalKey(k, ikey)) {//DHQ: InternalKey，从 slice 转结构体
     status_ = Status::Corruption("corrupted internal key in DBIter");
     return false;
   } else {
@@ -162,7 +162,7 @@ void DBIter::Next() {
       return;
     }
     // saved_key_ already contains the key to skip past.
-  } else {
+  } else {//DHQ: 上次不是Reverse，则直接从上次的key(作为 saved_key_ )，开始找
     // Store in saved_key_ the current key so we skip it below.
     SaveKey(ExtractUserKey(iter_->key()), &saved_key_);
   }
@@ -178,7 +178,7 @@ void DBIter::FindNextUserEntry(bool skipping, std::string* skip) {
     ParsedInternalKey ikey;
     if (ParseKey(&ikey) && ikey.sequence <= sequence_) {
       switch (ikey.type) {
-        case kTypeDeletion:
+        case kTypeDeletion://DHQ: 遇到一个 delete，在kForward模式下，seqno 大的先遇到
           // Arrange to skip all upcoming entries for this key since
           // they are hidden by this deletion.
           SaveKey(ikey.user_key, skip);
@@ -186,7 +186,7 @@ void DBIter::FindNextUserEntry(bool skipping, std::string* skip) {
           break;
         case kTypeValue:
           if (skipping &&
-              user_comparator_->Compare(ikey.user_key, *skip) <= 0) {
+              user_comparator_->Compare(ikey.user_key, *skip) <= 0) {//DHQ: 之前遇到了一个 delete，相同 user_key的，需要被 skip掉
             // Entry hidden
           } else {
             valid_ = true;
@@ -196,7 +196,7 @@ void DBIter::FindNextUserEntry(bool skipping, std::string* skip) {
           break;
       }
     }
-    iter_->Next();
+    iter_->Next(); //DHQ: 实际上是上面 if 的 else
   } while (iter_->Valid());
   saved_key_.clear();
   valid_ = false;
@@ -214,7 +214,7 @@ void DBIter::Prev() {
       iter_->Prev();
       if (!iter_->Valid()) {
         valid_ = false;
-        saved_key_.clear();
+        saved_key_.clear(); //DHQ: 分别 clear saved_key 和 saved_value
         ClearSavedValue();
         return;
       }

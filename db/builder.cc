@@ -13,7 +13,7 @@
 #include "leveldb/iterator.h"
 
 namespace leveldb {
-//DHQ：这个实际上用于从 imm_写。level-0，不存在多层合并的问题
+//DHQ：这个实际上用于从 imm_写 level-0 sst file，不存在多层合并的问题
 Status BuildTable(const std::string& dbname,
                   Env* env,
                   const Options& options,
@@ -27,7 +27,7 @@ Status BuildTable(const std::string& dbname,
   std::string fname = TableFileName(dbname, meta->number);
   if (iter->Valid()) {
     WritableFile* file;
-    s = env->NewWritableFile(fname, &file);
+    s = env->NewWritableFile(fname, &file);//DHQ: 新创建一个file
     if (!s.ok()) {
       return s;
     }

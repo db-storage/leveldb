@@ -51,7 +51,7 @@ struct DBImpl::Writer {
 };
 
 struct DBImpl::CompactionState {
-  Compaction* const compaction;
+  Compaction* const compaction; //DHQ： 大部分状态在 Compaction里面
 
   // Sequence numbers < smallest_snapshot are not significant since we
   // will never have to service a snapshot below smallest_snapshot.
@@ -64,8 +64,8 @@ struct DBImpl::CompactionState {
     uint64_t number;
     uint64_t file_size;
     InternalKey smallest, largest;
-  };
-  std::vector<Output> outputs;
+  };//DHQ: 描述输出的某个文件
+  std::vector<Output> outputs; //DHQ： 多个文件，分布有范围
 
   // State kept for output being generated
   WritableFile* outfile;
@@ -217,7 +217,7 @@ void DBImpl::MaybeIgnoreError(Status* s) const {
     *s = Status::OK();
   }
 }
-
+//DHQ: 删除文件,  kDescriptorFile 是 manifest file，旧的也会被删除
 void DBImpl::DeleteObsoleteFiles() {
   mutex_.AssertHeld();
 
@@ -235,7 +235,7 @@ void DBImpl::DeleteObsoleteFiles() {
   env_->GetChildren(dbname_, &filenames);  // Ignoring errors on purpose
   uint64_t number;
   FileType type;
-  for (size_t i = 0; i < filenames.size(); i++) {
+  for (size_t i = 0; i < filenames.size(); i++) { //DHQ: 按照 id，从 0开始，判断是否需要保留
     if (ParseFileName(filenames[i], &number, &type)) {
       bool keep = true;
       switch (type) {
@@ -265,7 +265,7 @@ void DBImpl::DeleteObsoleteFiles() {
 
       if (!keep) {
         if (type == kTableFile) {
-          table_cache_->Evict(number);
+          table_cache_->Evict(number); //DHQ: 需要从cache里面删除掉
         }
         Log(options_.info_log, "Delete type=%d #%lld\n",
             static_cast<int>(type),
@@ -563,7 +563,7 @@ void DBImpl::CompactMemTable() {
     imm_->Unref();
     imm_ = nullptr;
     has_imm_.Release_Store(nullptr);
-    DeleteObsoleteFiles();
+    DeleteObsoleteFiles(); //DHQ: compact完成，删除旧文件，不含 Manifest.
   } else {
     RecordBackgroundError(s);
   }
@@ -714,18 +714,18 @@ void DBImpl::BackgroundCompaction() {
         (m->end ? m->end->DebugString().c_str() : "(end)"),
         (m->done ? "(end)" : manual_end.DebugString().c_str()));
   } else {
-    c = versions_->PickCompaction();
+    c = versions_->PickCompaction(); //DHQ：选择 compaction 对象
   }
 
   Status status;
   if (c == nullptr) {
     // Nothing to do
-  } else if (!is_manual && c->IsTrivialMove()) {
+  } else if (!is_manual && c->IsTrivialMove()) { //DHQ: 不需要产生新的output file，所以没有 CompactionState
     // Move file to next level
     assert(c->num_input_files(0) == 1);
     FileMetaData* f = c->input(0, 0);
-    c->edit()->DeleteFile(c->level(), f->number);
-    c->edit()->AddFile(c->level() + 1, f->number, f->file_size,
+    c->edit()->DeleteFile(c->level(), f->number); //DHQ: level-n，delete file
+    c->edit()->AddFile(c->level() + 1, f->number, f->file_size, //DHQ: level-n+1, Add file
                        f->smallest, f->largest);
     status = versions_->LogAndApply(c->edit(), &mutex_);
     if (!status.ok()) {
@@ -906,8 +906,8 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
   if (snapshots_.empty()) {
     compact->smallest_snapshot = versions_->LastSequence();
   } else {
-    compact->smallest_snapshot = snapshots_.oldest()->sequence_number();
-  }
+    compact->smallest_snapshot = snapshots_.oldest()->sequence_number(); //DHQ: 用户创建的snapshot中最小的那个
+  }//DHQ: 对于两个snapshot之间的多个 版本，是否也应该精简？而不仅仅判断 smallest_snapshot ？
 
   // Release mutex while we're actually doing the compaction work
   mutex_.Unlock();
@@ -925,7 +925,7 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
       const uint64_t imm_start = env_->NowMicros();
       mutex_.Lock();
       if (imm_ != nullptr) {
-        CompactMemTable();
+        CompactMemTable(); //DHQ: 先 compact _imm
         // Wake up MakeRoomForWrite() if necessary.
         background_work_finished_signal_.SignalAll(); //DHQ: MemTable compaction后，imm_ 为空，可以唤醒 MakeRoomForWrite
       }
@@ -944,7 +944,7 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
 
     // Handle key/value, add to state, etc.
     bool drop = false;
-    if (!ParseInternalKey(key, &ikey)) {
+    if (!ParseInternalKey(key, &ikey)) {//DHQ: 解析错误
       // Do not hide error keys
       current_user_key.clear();
       has_current_user_key = false;
@@ -958,13 +958,13 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
         has_current_user_key = true;
         last_sequence_for_key = kMaxSequenceNumber;
       }
-
+      //DHQ： key "xyz"，有两个seqno, 18, 22，而 smallest_snapshot = 28。那么先找到的是22，后找到18。 22 < 28，所以 18可以被drop
       if (last_sequence_for_key <= compact->smallest_snapshot) {
         // Hidden by an newer entry for same user key
         drop = true;    // (A)
       } else if (ikey.type == kTypeDeletion &&
                  ikey.sequence <= compact->smallest_snapshot &&
-                 compact->compaction->IsBaseLevelForKey(ikey.user_key)) {
+                 compact->compaction->IsBaseLevelForKey(ikey.user_key)) {//DHQ: compact的是level n和n+1，如果在n+2 及更大的没有这个key，那么就是BaseLevel了
         // For this user key:
         // (1) there is no data in higher levels
         // (2) data in lower levels will have larger sequence numbers
@@ -1118,9 +1118,9 @@ Status DBImpl::Get(const ReadOptions& options,
                    const Slice& key,
                    std::string* value) {
   Status s;
-  MutexLock l(&mutex_);
+  MutexLock l(&mutex_); //DHQ: 先lock
   SequenceNumber snapshot;
-  if (options.snapshot != nullptr) {
+  if (options.snapshot != nullptr) {//DHQ: 预先获取的 snapshot(seqno)
     snapshot =
         static_cast<const SnapshotImpl*>(options.snapshot)->sequence_number();
   } else {
@@ -1132,14 +1132,14 @@ Status DBImpl::Get(const ReadOptions& options,
   Version* current = versions_->current();
   mem->Ref();
   if (imm != nullptr) imm->Ref();
-  current->Ref();
+  current->Ref(); //DHQ: 这个current的ref，根mem_table时两码事。 Version 的Ref  保证 SST 不变
 
   bool have_stat_update = false;
   Version::GetStats stats;
 
   // Unlock while reading from files and memtables
   {
-    mutex_.Unlock();
+    mutex_.Unlock(); //DHQ: 已获取 ref，可以unlock
     // First look in the memtable, then in the immutable memtable (if any).
     LookupKey lkey(key, snapshot);
     if (mem->Get(lkey, value, &s)) {
@@ -1150,7 +1150,7 @@ Status DBImpl::Get(const ReadOptions& options,
       s = current->Get(options, lkey, value, &stats);
       have_stat_update = true;
     }
-    mutex_.Lock();
+    mutex_.Lock(); //DHQ: Unref这种操作，也需要 lock
   }
 
   if (have_stat_update && current->UpdateStats(stats)) {
@@ -1158,14 +1158,14 @@ Status DBImpl::Get(const ReadOptions& options,
   }
   mem->Unref();
   if (imm != nullptr) imm->Unref();
-  current->Unref();
+  current->Unref();//DHQ: unref 
   return s;
 }
 
 Iterator* DBImpl::NewIterator(const ReadOptions& options) {
   SequenceNumber latest_snapshot;
   uint32_t seed;
-  Iterator* iter = NewInternalIterator(options, &latest_snapshot, &seed);
+  Iterator* iter = NewInternalIterator(options, &latest_snapshot, &seed); //DHQ: 内部获取了各种 Ref
   return NewDBIterator(
       this, user_comparator(), iter,
       (options.snapshot != nullptr
@@ -1193,22 +1193,22 @@ void DBImpl::ReleaseSnapshot(const Snapshot* snapshot) {
 
 // Convenience methods
 Status DBImpl::Put(const WriteOptions& o, const Slice& key, const Slice& val) {
-  return DB::Put(o, key, val);
+  return DB::Put(o, key, val); //DHQ: 先将操作放到batch中，再调用 DBImpl::Write
 }
 
 Status DBImpl::Delete(const WriteOptions& options, const Slice& key) {
-  return DB::Delete(options, key);
+  return DB::Delete(options, key);//DHQ: 先将操作放到batch中，再调用 DBImpl::Write
 }
-
+//DHQ: 前面已经创建。batch，这里就处理batch
 Status DBImpl::Write(const WriteOptions& options, WriteBatch* my_batch) {
   Writer w(&mutex_); //DHQ: mutex_用于初始化 cv，下面的cv.Wait()，等待时不会持有mutex
-  w.batch = my_batch;
+  w.batch = my_batch; //DHQ ： my_batch 放到 w.batch
   w.sync = options.sync;
   w.done = false;
 
   MutexLock l(&mutex_);
-  writers_.push_back(&w); //DHQ: 并发的Write，公用writers_，然后一起打包成同一个log record
-  while (!w.done && &w != writers_.front()) {//DHQ: Front的负责写log
+  writers_.push_back(&w); //DHQ: 并发的Write，公用 writers_，然后一起打包成一个log record
+  while (!w.done && &w != writers_.front()) {//DHQ: Front的负责写log, 别的线程可能帮本线程干完活，done()为 true
     w.cv.Wait();
   }
   if (w.done) {
@@ -1218,7 +1218,7 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* my_batch) {
   // May temporarily unlock and wait.
   Status status = MakeRoomForWrite(my_batch == nullptr);
   uint64_t last_sequence = versions_->LastSequence();
-  Writer* last_writer = &w;
+  Writer* last_writer = &w;  //DHQ: 空的 batch，用于 compaction
   if (status.ok() && my_batch != nullptr) {  // nullptr batch is for compactions
     WriteBatch* updates = BuildBatchGroup(&last_writer);//DHQ: 从 writers_ 构建 updates
     WriteBatchInternal::SetSequence(updates, last_sequence + 1);
@@ -1485,7 +1485,7 @@ void DBImpl::GetApproximateSizes(//DHQ: 获取多个 Range的大小
 // can call if they wish
 Status DB::Put(const WriteOptions& opt, const Slice& key, const Slice& value) {
   WriteBatch batch;
-  batch.Put(key, value);
+  batch.Put(key, value); //这个batch，多个调用共享的。就是个封装，能一致化处理 Put/Del，
   return Write(opt, &batch);
 }
 
@@ -1496,7 +1496,7 @@ Status DB::Delete(const WriteOptions& opt, const Slice& key) {
 }
 
 DB::~DB() { }
-
+//DHQ: Open，返回 DBImpl 
 Status DB::Open(const Options& options, const std::string& dbname,
                 DB** dbptr) {
   *dbptr = nullptr;

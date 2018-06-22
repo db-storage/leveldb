@@ -298,8 +298,8 @@ class VersionSet {
   const Options* const options_;
   TableCache* const table_cache_;
   const InternalKeyComparator icmp_;
-  uint64_t next_file_number_;
-  uint64_t manifest_file_number_;
+  uint64_t next_file_number_; //DHQ: 这几项都是当前最新的值
+  uint64_t manifest_file_number_; 
   uint64_t last_sequence_;
   uint64_t log_number_;
   uint64_t prev_log_number_;  // 0 or backing store for memtable being compacted

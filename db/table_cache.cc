@@ -50,7 +50,7 @@ Status TableCache::FindTable(uint64_t file_number, uint64_t file_size,
   Slice key(buf, sizeof(buf));
   *handle = cache_->Lookup(key);
   if (*handle == nullptr) {
-    std::string fname = TableFileName(dbname_, file_number);
+    std::string fname = TableFileName(dbname_, file_number); //先尝试这种，应该是plantable格式？
     RandomAccessFile* file = nullptr;
     Table* table = nullptr;
     s = env_->NewRandomAccessFile(fname, &file);

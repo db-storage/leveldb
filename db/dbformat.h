@@ -162,7 +162,7 @@ inline int InternalKeyComparator::Compare(
     const InternalKey& a, const InternalKey& b) const {
   return Compare(a.Encode(), b.Encode());
 }
-//DHQ：返回true，代表解析结果正确
+//DHQ：把 slice 变成结构体，好判断
 inline bool ParseInternalKey(const Slice& internal_key,
                              ParsedInternalKey* result) {//
   const size_t n = internal_key.size();

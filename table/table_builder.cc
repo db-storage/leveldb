@@ -135,7 +135,7 @@ void TableBuilder::Flush() {
     r->filter_block->StartBlock(r->offset);
   }
 }
-
+//DHQ: 写完有个 Reset，即 Reset 了
 void TableBuilder::WriteBlock(BlockBuilder* block, BlockHandle* handle) {
   // File format contains a sequence of blocks where each block has:
   //    block_data: uint8[n]

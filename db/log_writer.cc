@@ -73,7 +73,7 @@ Status Writer::AddRecord(const Slice& slice) {
       type = kMiddleType;
     }
 
-    s = EmitPhysicalRecord(type, ptr, fragment_length);
+    s = EmitPhysicalRecord(type, ptr, fragment_length);//DHQ: 里面实际写，并会 sync
     ptr += fragment_length;
     left -= fragment_length;
     begin = false;
