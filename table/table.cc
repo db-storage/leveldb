@@ -47,11 +47,11 @@ Status Table::Open(const Options& options,
   char footer_space[Footer::kEncodedLength];
   Slice footer_input;
   Status s = file->Read(size - Footer::kEncodedLength, Footer::kEncodedLength,
-                        &footer_input, footer_space);
+                        &footer_input, footer_space);//DHQ: 先读取 footer
   if (!s.ok()) return s;
 
   Footer footer;
-  s = footer.DecodeFrom(&footer_input);
+  s = footer.DecodeFrom(&footer_input);//DHQ: Decode footer
   if (!s.ok()) return s;
 
   // Read the index block
@@ -60,11 +60,11 @@ Status Table::Open(const Options& options,
     ReadOptions opt;
     if (options.paranoid_checks) {
       opt.verify_checksums = true;
-    }
-    s = ReadBlock(file, opt, footer.index_handle(), &index_block_contents);
+    }//DHQ: 读取 index block，根据 index_handle 确定 offset 和 size 
+    s = ReadBlock(file, opt, footer.index_handle(), &index_block_contents); 
   }
 
-  if (s.ok()) {
+  if (s.ok()) {//DHQ: 根据IndexBlock内容，获取 sst 的 meta
     // We've successfully read the footer and the index block: we're
     // ready to serve requests.
     Block* index_block = new Block(index_block_contents);
@@ -94,10 +94,10 @@ void Table::ReadMeta(const Footer& footer) {
   if (rep_->options.paranoid_checks) {
     opt.verify_checksums = true;
   }
-  BlockContents contents;
+  BlockContents contents; //DHQ: 注意，虽然前面读 metaindex,这里读取meta，但是都是 BlockContents结构，共用的
   if (!ReadBlock(rep_->file, opt, footer.metaindex_handle(), &contents).ok()) {
     // Do not propagate errors since meta info is not needed for operation
-    return;
+    return; //DHQ: metaindex_block，还是空么？还是有内容了?
   }
   Block* meta = new Block(contents);
 
@@ -157,6 +157,7 @@ static void ReleaseBlock(void* arg, void* h) {
 // Convert an index iterator value (i.e., an encoded BlockHandle)
 // into an iterator over the contents of the corresponding block.
 Iterator* Table::BlockReader(void* arg,
+
                              const ReadOptions& options,
                              const Slice& index_value) {
   Table* table = reinterpret_cast<Table*>(arg);
@@ -211,7 +212,7 @@ Iterator* Table::BlockReader(void* arg,
   }
   return iter;
 }
-
+//DHQ: 注意Table的 Iterator实现
 Iterator* Table::NewIterator(const ReadOptions& options) const {
   return NewTwoLevelIterator(
       rep_->index_block->NewIterator(rep_->options.comparator),

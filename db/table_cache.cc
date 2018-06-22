@@ -15,7 +15,7 @@ struct TableAndFile {
   RandomAccessFile* file;
   Table* table;
 };
-
+//DHQ: 这个是给cache的callback，cache删除 entry时，调用
 static void DeleteEntry(const Slice& key, void* value) {
   TableAndFile* tf = reinterpret_cast<TableAndFile*>(value);
   delete tf->table;
@@ -46,22 +46,22 @@ Status TableCache::FindTable(uint64_t file_number, uint64_t file_size,
                              Cache::Handle** handle) {
   Status s;
   char buf[sizeof(file_number)];
-  EncodeFixed64(buf, file_number);
+  EncodeFixed64(buf, file_number); //DHQ: file number，作为table cache的key
   Slice key(buf, sizeof(buf));
   *handle = cache_->Lookup(key);
   if (*handle == nullptr) {
     std::string fname = TableFileName(dbname_, file_number); //先尝试这种，应该是plantable格式？
     RandomAccessFile* file = nullptr;
     Table* table = nullptr;
-    s = env_->NewRandomAccessFile(fname, &file);
+    s = env_->NewRandomAccessFile(fname, &file); //DHQ: 获取 file 的名字
     if (!s.ok()) {
       std::string old_fname = SSTTableFileName(dbname_, file_number);
       if (env_->NewRandomAccessFile(old_fname, &file).ok()) {
         s = Status::OK();
       }
     }
-    if (s.ok()) {
-      s = Table::Open(options_, file, file_size, &table);
+    if (s.ok()) {//DHQ: 没找到就临时 Open
+      s = Table::Open(options_, file, file_size, &table); //DHQ: Table.cc，返回 Table结构
     }
 
     if (!s.ok()) {
@@ -71,7 +71,7 @@ Status TableCache::FindTable(uint64_t file_number, uint64_t file_size,
       // or somebody repairs the file, we recover automatically.
     } else {
       TableAndFile* tf = new TableAndFile;
-      tf->file = file;
+      tf->file = file; //DHQ: file名字，数字 + TableFileName 或者 SSTTableFileName
       tf->table = table;
       *handle = cache_->Insert(key, tf, 1, &DeleteEntry);
     }
