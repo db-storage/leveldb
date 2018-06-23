@@ -96,12 +96,15 @@ void TableBuilder::Add(const Slice& key, const Slice& value) {
   if (r->num_entries > 0) {
     assert(r->options.comparator->Compare(key, Slice(r->last_key)) > 0);
   }
-
+  /* DHQ: pending_index_entry 标志位用来判定是不是data block的第一个key， 在上一个data block Flush的时候，会将该标志位置位，
+   * 当下一个data block第一个key-value到来后，成功往index block插入分割key之后，就会清零  */
   if (r->pending_index_entry) {
     assert(r->data_block.empty());
     r->options.comparator->FindShortestSeparator(&r->last_key, key);
     std::string handle_encoding;
     r->pending_handle.EncodeTo(&handle_encoding);
+    /*DHQ: 计算出来的分割key即r->last_key作为key，而上一个data block的位置信息作为value。
+      pending_handle里面存放的是上一个data block的位置信息，BlockHandle类型*/
     r->index_block.Add(r->last_key, Slice(handle_encoding));
     r->pending_index_entry = false;
   }
@@ -119,8 +122,8 @@ void TableBuilder::Add(const Slice& key, const Slice& value) {
     Flush();
   }
 }
-
-void TableBuilder::Flush() {
+//DHQ: 这里面 设置了 pending_index_entry 为true，表示下一个 DataBlock的开始
+void TableBuilder::Flush() {//DHQ: flush的是 data block，不是整个table。Table在 Finish()中 Flush，包括 meta, metaindex, index等各种block
   Rep* r = rep_;
   assert(!r->closed);
   if (!ok()) return;
@@ -135,7 +138,7 @@ void TableBuilder::Flush() {
     r->filter_block->StartBlock(r->offset);
   }
 }
-//DHQ: 写完有个 Reset，即 Reset 了
+//DHQ: 先处理 compression，然后再调用 WriteRawBlock
 void TableBuilder::WriteBlock(BlockBuilder* block, BlockHandle* handle) {
   // File format contains a sequence of blocks where each block has:
   //    block_data: uint8[n]
@@ -171,7 +174,7 @@ void TableBuilder::WriteBlock(BlockBuilder* block, BlockHandle* handle) {
   r->compressed_output.clear();
   block->Reset();
 }
-
+//DHQ: 明确知道不会压缩的
 void TableBuilder::WriteRawBlock(const Slice& block_contents,
                                  CompressionType type,
                                  BlockHandle* handle) {
@@ -208,7 +211,7 @@ Status TableBuilder::Finish() {
   if (ok() && r->filter_block != nullptr) {
     WriteRawBlock(r->filter_block->Finish(), kNoCompression,
                   &filter_block_handle);
-  }
+  }//DHQ: bloom filter等，没法压缩，直接 Raw 写
 
   // Write metaindex block
   if (ok()) {
@@ -225,6 +228,7 @@ Status TableBuilder::Finish() {
     // TODO(postrelease): Add stats and other meta blocks
     WriteBlock(&meta_index_block, &metaindex_block_handle);
   }
+
 
   // Write index block
   if (ok()) {

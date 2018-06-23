@@ -157,8 +157,8 @@ void TwoLevelIterator::InitDataBlock() {
   if (!index_iter_.Valid()) {
     SetDataIterator(nullptr);
   } else {
-    Slice handle = index_iter_.value();
-    if (data_iter_.iter() != nullptr && handle.compare(data_block_handle_) == 0) {
+    Slice handle = index_iter_.value(); //DHQ: index_iter_ 的 value 作为 新handle  
+    if (data_iter_.iter() != nullptr && handle.compare(data_block_handle_) == 0) {//比较handle确认是否已经相同
       // data_iter_ is already constructed with this iterator, so
       // no need to change anything
     } else {

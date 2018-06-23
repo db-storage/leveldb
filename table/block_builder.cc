@@ -44,7 +44,7 @@ BlockBuilder::BlockBuilder(const Options* options)
   assert(options->block_restart_interval >= 1);
   restarts_.push_back(0);       // First restart point is at offset 0
 }
-
+//DHQ: Reset是为了复用结构
 void BlockBuilder::Reset() {
   buffer_.clear();
   restarts_.clear();

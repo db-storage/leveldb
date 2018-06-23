@@ -214,7 +214,7 @@ Iterator* Table::BlockReader(void* arg,
 }
 //DHQ: 注意Table的 Iterator实现
 Iterator* Table::NewIterator(const ReadOptions& options) const {
-  return NewTwoLevelIterator(
+  return NewTwoLevelIterator(//DHQ: 整体是个两层的
       rep_->index_block->NewIterator(rep_->options.comparator),
       &Table::BlockReader, const_cast<Table*>(this), options);
 }
