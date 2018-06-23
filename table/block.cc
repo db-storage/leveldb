@@ -203,7 +203,7 @@ class Block::Iter : public Iterator {
   }
 
   virtual void SeekToFirst() {
-    SeekToRestartPoint(0);
+    SeekToRestartPoint(0);//DHQ: Fisrt就是 RestartPoint[0]
     ParseNextKey();
   }
 
@@ -233,16 +233,16 @@ class Block::Iter : public Iterator {
       restart_index_ = num_restarts_;
       return false;
     }
-
+    //DHQ: 返回的p，是non_shared的首地址
     // Decode next entry
     uint32_t shared, non_shared, value_length;
-    p = DecodeEntry(p, limit, &shared, &non_shared, &value_length);
-    if (p == nullptr || key_.size() < shared) {
+    p = DecodeEntry(p, limit, &shared, &non_shared, &value_length); //DHQ: 获得下一个 entry 的 key的各个部分长度
+    if (p == nullptr || key_.size() < shared) {//DHQ: 必须大于 shared 部分，否则共享不成立
       CorruptionError();
       return false;
     } else {
-      key_.resize(shared);
-      key_.append(p, non_shared);
+      key_.resize(shared);//DHQ: 既然是shared，那么上次的 shared 部分就可以继续用，保留 shared 个字节即可
+      key_.append(p, non_shared);//DHQ: non_shared 部分，append上去
       value_ = Slice(p + non_shared, value_length);
       while (restart_index_ + 1 < num_restarts_ &&
              GetRestartPoint(restart_index_ + 1) < current_) {

@@ -26,7 +26,7 @@ void FilterBlockBuilder::StartBlock(uint64_t block_offset) {
     GenerateFilter();
   }
 }
-
+//DHQ: 不是立即计算key的，而是先保存起来关联的所有key，然后统一由 GenerateFilter 生成filter
 void FilterBlockBuilder::AddKey(const Slice& key) {
   Slice k = key;
   start_.push_back(keys_.size());
@@ -35,7 +35,7 @@ void FilterBlockBuilder::AddKey(const Slice& key) {
 
 Slice FilterBlockBuilder::Finish() {
   if (!start_.empty()) {
-    GenerateFilter();
+    GenerateFilter();//DHQ: 调用 GenerateFilter
   }
 
   // Append array of per-filter offsets
@@ -69,7 +69,7 @@ void FilterBlockBuilder::GenerateFilter() {
   // Generate filter for current set of keys and append to result_.
   filter_offsets_.push_back(result_.size());
   policy_->CreateFilter(&tmp_keys_[0], static_cast<int>(num_keys), &result_);
-
+  //DHQ: 这里实际上是根据policy产生的。
   tmp_keys_.clear();
   keys_.clear();
   start_.clear();

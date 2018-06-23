@@ -67,7 +67,7 @@ Status Table::Open(const Options& options,
   if (s.ok()) {//DHQ: 根据IndexBlock内容，获取 sst 的 meta
     // We've successfully read the footer and the index block: we're
     // ready to serve requests.
-    Block* index_block = new Block(index_block_contents);
+    Block* index_block = new Block(index_block_contents); //DHQ: block结构，主要用于读取。先从盘上获取内容，在构造Block结构。
     Rep* rep = new Table::Rep;
     rep->options = options;
     rep->file = file;

@@ -44,7 +44,7 @@ BlockBuilder::BlockBuilder(const Options* options)
   assert(options->block_restart_interval >= 1);
   restarts_.push_back(0);       // First restart point is at offset 0
 }
-//DHQ: Reset是为了复用结构
+//DHQ: Reset是为了复用结构，因为不断生成新的 block数据
 void BlockBuilder::Reset() {
   buffer_.clear();
   restarts_.clear();
@@ -59,7 +59,7 @@ size_t BlockBuilder::CurrentSizeEstimate() const {
           restarts_.size() * sizeof(uint32_t) +   // Restart array
           sizeof(uint32_t));                      // Restart array length
 }
-
+//DHQ: Finish主要处理restarts
 Slice BlockBuilder::Finish() {
   // Append restart array
   for (size_t i = 0; i < restarts_.size(); i++) {

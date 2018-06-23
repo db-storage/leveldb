@@ -17,7 +17,7 @@ typedef Iterator* (*BlockFunction)(void*, const ReadOptions&, const Slice&);
 
 class TwoLevelIterator: public Iterator {
  public:
-  TwoLevelIterator(
+  TwoLevelIterator(//DHQ: 参数只有一个Iter,是index_iter，另外的小iter，是通过BlockFunction去读取block，再构建的。
     Iterator* index_iter,
     BlockFunction block_function,
     void* arg,
@@ -66,7 +66,7 @@ class TwoLevelIterator: public Iterator {
   void* arg_;
   const ReadOptions options_;
   Status status_;
-  IteratorWrapper index_iter_;
+  IteratorWrapper index_iter_; //DHQ: Wrapper，不是 Iter
   IteratorWrapper data_iter_; // May be nullptr
   // If data_iter_ is non-null, then "data_block_handle_" holds the
   // "index_value" passed to block_function_ to create the data_iter_.
@@ -92,7 +92,7 @@ void TwoLevelIterator::Seek(const Slice& target) {
   index_iter_.Seek(target);
   InitDataBlock();
   if (data_iter_.iter() != nullptr) data_iter_.Seek(target);
-  SkipEmptyDataBlocksForward();
+  SkipEmptyDataBlocksForward();//DHQ: Skip也有 Backward 和 Forward 两个方向
 }
 
 void TwoLevelIterator::SeekToFirst() {

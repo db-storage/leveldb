@@ -13,7 +13,8 @@
 namespace leveldb {
 
 struct Options;
-
+//DHQ: BlockBuilder 被TablerBuilder用于不断生成新的 Block 数据写下去 ，不是 Block自身。
+//相比之下，Block结构，主要用于读，提供 Iter
 class BlockBuilder {
  public:
   explicit BlockBuilder(const Options* options);

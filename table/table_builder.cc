@@ -210,7 +210,7 @@ Status TableBuilder::Finish() {
   // Write filter block
   if (ok() && r->filter_block != nullptr) {
     WriteRawBlock(r->filter_block->Finish(), kNoCompression,
-                  &filter_block_handle);
+                  &filter_block_handle); 
   }//DHQ: bloom filter等，没法压缩，直接 Raw 写
 
   // Write metaindex block

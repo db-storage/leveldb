@@ -45,7 +45,7 @@ class FilterBlockBuilder {
   std::vector<uint32_t> filter_offsets_;
 
   // No copying allowed
-  FilterBlockBuilder(const FilterBlockBuilder&);
+  FilterBlockBuilder(const FilterBlockBuilder&); //DHQ: 禁用 
   void operator=(const FilterBlockBuilder&);
 };
 

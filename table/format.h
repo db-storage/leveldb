@@ -10,7 +10,7 @@
 #include "leveldb/slice.h"
 #include "leveldb/status.h"
 #include "leveldb/table_builder.h"
-
+//DHQ: Table相关的各种 class ，以及操作函数等，不是磁盘结构
 namespace leveldb {
 
 class Block;

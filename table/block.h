@@ -13,7 +13,7 @@ namespace leveldb {
 
 struct BlockContents;
 class Comparator;
-
+//DHQ: 实际上可以理解为Block Reader
 class Block {
  public:
   // Initialize the block with the specified contents.
