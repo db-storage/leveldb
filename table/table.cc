@@ -179,9 +179,9 @@ Iterator* Table::BlockReader(void* arg,
       EncodeFixed64(cache_key_buffer+8, handle.offset());
       Slice key(cache_key_buffer, sizeof(cache_key_buffer));
       cache_handle = block_cache->Lookup(key);
-      if (cache_handle != nullptr) {
+      if (cache_handle != nullptr) {//DHQ: 从block_cache找到了
         block = reinterpret_cast<Block*>(block_cache->Value(cache_handle));
-      } else {
+      } else {//DHQ: 未找到，读取后，插入进block_cache
         s = ReadBlock(table->rep_->file, options, handle, &contents);
         if (s.ok()) {
           block = new Block(contents);
@@ -191,7 +191,7 @@ Iterator* Table::BlockReader(void* arg,
           }
         }
       }
-    } else {
+    } else {//DHQ: 完全没有block_cache，直接读
       s = ReadBlock(table->rep_->file, options, handle, &contents);
       if (s.ok()) {
         block = new Block(contents);
