@@ -46,7 +46,9 @@ class LEVELDB_EXPORT Iterator {
   // The iterator is Valid() after this call iff the source contains
   // an entry that comes at or past target.
   virtual void Seek(const Slice& target) = 0;
-
+  //DHQ: 注意Seek的含义，是 at 或者  past target，不一定匹配，然后可以用 Valid(), Next() 等做后续处理
+  //参见 SeekRandom
+  
   // Moves to the next entry in the source.  After this call, Valid() is
   // true iff the iterator was not positioned at the last entry in the source.
   // REQUIRES: Valid()

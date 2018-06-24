@@ -1123,7 +1123,7 @@ Status DBImpl::Get(const ReadOptions& options,
   if (options.snapshot != nullptr) {//DHQ: 预先获取的 snapshot(seqno)
     snapshot =
         static_cast<const SnapshotImpl*>(options.snapshot)->sequence_number();
-  } else {
+  } else {//DHQ: 即使没有指定snapshot，也会把当前的 seq 作为 snapshot 使用
     snapshot = versions_->LastSequence();
   }
 
@@ -1135,7 +1135,7 @@ Status DBImpl::Get(const ReadOptions& options,
   current->Ref(); //DHQ: 这个current的ref，根mem_table时两码事。 Version 的Ref  保证 SST 不变
 
   bool have_stat_update = false;
-  Version::GetStats stats;
+  Version::GetStats stats;1
 
   // Unlock while reading from files and memtables
   {

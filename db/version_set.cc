@@ -962,7 +962,7 @@ Status VersionSet::Recover(bool *save_manifest) {//DHQ: 所以，可以根据WAL
       }
 
       if (s.ok()) {
-        builder.Apply(&edit);
+        builder.Apply(&edit); //DHQ: 读取的是 VersionEdit，即manifest里面的增量，不是WAL
       }
 
       if (edit.has_log_number_) {

@@ -844,7 +844,7 @@ class Benchmark {
       char key[100];
       const int k = thread->rand.Next() % FLAGS_num;
       snprintf(key, sizeof(key), "%016d", k);
-      iter->Seek(key);
+      iter->Seek(key); //DHQ: 先 Seek，然后判断 key 确定是否 seek 成功。
       if (iter->Valid() && iter->key() == key) found++;
       delete iter;
       thread->stats.FinishedSingleOp();
