@@ -78,7 +78,7 @@ Status TableCache::FindTable(uint64_t file_number, uint64_t file_size,
   }
   return s;
 }
-
+//DHQ: Table 的  iter，都包含了对 table的 Ref。
 Iterator* TableCache::NewIterator(const ReadOptions& options,
                                   uint64_t file_number,
                                   uint64_t file_size,
@@ -112,7 +112,7 @@ Status TableCache::Get(const ReadOptions& options,
   Status s = FindTable(file_number, file_size, &handle);
   if (s.ok()) {
     Table* t = reinterpret_cast<TableAndFile*>(cache_->Value(handle))->table;
-    s = t->InternalGet(options, k, arg, saver);
+    s = t->InternalGet(options, k, arg, saver);//DHQ: InternalGet不保证一定match，外面会在 SaveValue 里面判断。
     cache_->Release(handle);
   }
   return s;

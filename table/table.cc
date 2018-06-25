@@ -82,7 +82,7 @@ Status Table::Open(const Options& options,
 
   return s;
 }
-
+//DHQ: 读取 bloom filter 等 meta，不是index
 void Table::ReadMeta(const Footer& footer) {
   if (rep_->options.filter_policy == nullptr) {
     return;  // Do not need any metadata
@@ -100,11 +100,11 @@ void Table::ReadMeta(const Footer& footer) {
     return; //DHQ: metaindex_block，还是空么？还是有内容了?
   }
   Block* meta = new Block(contents);
-
+  //DHQ: 这个实际是时MetaBlock Index的 iter,
   Iterator* iter = meta->NewIterator(BytewiseComparator());
   std::string key = "filter.";
   key.append(rep_->options.filter_policy->Name());
-  iter->Seek(key);
+  iter->Seek(key); //目前应该只处理了 filter metadata
   if (iter->Valid() && iter->key() == Slice(key)) {
     ReadFilter(iter->value());
   }
@@ -200,7 +200,7 @@ Iterator* Table::BlockReader(void* arg,
   }
 
   Iterator* iter;
-  if (block != nullptr) {
+  if (block != nullptr) {//DHQ: 调用 block 的 NewIterator
     iter = block->NewIterator(table->rep_->options.comparator);
     if (cache_handle == nullptr) {
       iter->RegisterCleanup(&DeleteBlock, block, nullptr);
@@ -231,11 +231,11 @@ Status Table::InternalGet(const ReadOptions& options, const Slice& k,
     BlockHandle handle;
     if (filter != nullptr &&
         handle.DecodeFrom(&handle_value).ok() &&
-        !filter->KeyMayMatch(handle.offset(), k)) {
+        !filter->KeyMayMatch(handle.offset(), k)) {//DHQ: 判断 filter，确定没有，直接返回
       // Not found
     } else {
       Iterator* block_iter = BlockReader(this, options, iiter->value());
-      block_iter->Seek(k);
+      block_iter->Seek(k); //DHQ: 这个值，其实不是准确的。外面会判断到底是不是想要的key.
       if (block_iter->Valid()) {
         (*saver)(arg, block_iter->key(), block_iter->value());
       }

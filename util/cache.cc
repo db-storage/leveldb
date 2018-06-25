@@ -256,7 +256,7 @@ Cache::Handle* LRUCache::Lookup(const Slice& key, uint32_t hash) {
   MutexLock l(&mutex_);
   LRUHandle* e = table_.Lookup(key, hash);
   if (e != nullptr) {
-    Ref(e);
+    Ref(e); //DHQ: Lookup隐含了Ref
   }
   return reinterpret_cast<Cache::Handle*>(e);
 }

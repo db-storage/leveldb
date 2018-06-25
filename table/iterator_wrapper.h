@@ -9,7 +9,8 @@
 #include "leveldb/slice.h"
 
 namespace leveldb {
-//DHQ: 这个封装本身很简单，但是局部性是啥？
+//DHQ: 这个封装本身很简单，valid()和key()可以缓存，减少调用底层函数次数
+// Valid()和Key()，可以快速执行完
 // A internal wrapper class with an interface similar to Iterator that
 // caches the valid() and key() results for an underlying iterator.
 // This can help avoid virtual function calls and also gives better

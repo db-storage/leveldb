@@ -270,7 +270,7 @@ static void SaveValue(void* arg, const Slice& ikey, const Slice& v) {
   ParsedInternalKey parsed_key;
   if (!ParseInternalKey(ikey, &parsed_key)) {
     s->state = kCorrupt;
-  } else {
+  } else {//DHQ: Get操作，实际上也是调用 Iter的 Seek，但是Seek到的可能是 >= user_key的，不一定正好 match，所以需要判断。
     if (s->ucmp->Compare(parsed_key.user_key, s->user_key) == 0) {
       s->state = (parsed_key.type == kTypeValue) ? kFound : kDeleted;
       if (s->state == kFound) {
@@ -404,7 +404,7 @@ Status Version::Get(const ReadOptions& options,
       saver.state = kNotFound;
       saver.ucmp = ucmp;
       saver.user_key = user_key;
-      saver.value = value;
+      saver.value = value; //TableCache::Get，利用seek，返回的可能是 >= key的。不一定正好match
       s = vset_->table_cache_->Get(options, f->number, f->file_size,
                                    ikey, &saver, SaveValue);
       if (!s.ok()) {
