@@ -181,12 +181,12 @@ Status DBImpl::NewDB() {
   VersionEdit new_db;
   new_db.SetComparatorName(user_comparator()->Name());
   new_db.SetLogNumber(0);
-  new_db.SetNextFile(2);
+  new_db.SetNextFile(2);//DHQ: Manifest使用 1
   new_db.SetLastSequence(0);
 
   const std::string manifest = DescriptorFileName(dbname_, 1);
   WritableFile* file;
-  Status s = env_->NewWritableFile(manifest, &file);
+  Status s = env_->NewWritableFile(manifest, &file);//DHQ: 创建  id 为 1 的Manifest
   if (!s.ok()) {
     return s;
   }
@@ -202,7 +202,7 @@ Status DBImpl::NewDB() {
   delete file;
   if (s.ok()) {
     // Make "CURRENT" file that points to the new manifest file.
-    s = SetCurrentFile(env_, dbname_, 1);
+    s = SetCurrentFile(env_, dbname_, 1); //DHQ: 写 "CURRENT" 这个文件，让其记录 id 为 1的manifest
   } else {
     env_->DeleteFile(manifest);
   }
@@ -291,7 +291,7 @@ Status DBImpl::Recover(VersionEdit* edit, bool *save_manifest) {
 
   if (!env_->FileExists(CurrentFileName(dbname_))) {
     if (options_.create_if_missing) {
-      s = NewDB();
+      s = NewDB();//DHQ: 没有CURRENT 文件，所以相当于初始化
       if (!s.ok()) {
         return s;
       }
@@ -1199,7 +1199,7 @@ Status DBImpl::Put(const WriteOptions& o, const Slice& key, const Slice& val) {
 Status DBImpl::Delete(const WriteOptions& options, const Slice& key) {
   return DB::Delete(options, key);//DHQ: 先将操作放到batch中，再调用 DBImpl::Write
 }
-//DHQ: 前面已经创建。batch，这里就处理batch
+//DHQ: 前面已经创建batch，这里就处理batch
 Status DBImpl::Write(const WriteOptions& options, WriteBatch* my_batch) {
   Writer w(&mutex_); //DHQ: mutex_用于初始化 cv，下面的cv.Wait()，等待时不会持有mutex
   w.batch = my_batch; //DHQ ： my_batch 放到 w.batch
@@ -1519,7 +1519,7 @@ Status DB::Open(const Options& options, const std::string& dbname,
       impl->logfile_number_ = new_log_number;
       impl->log_ = new log::Writer(lfile);
       impl->mem_ = new MemTable(impl->internal_comparator_);
-      impl->mem_->Ref();
+      impl->mem_->Ref(); //DHQ: impl 对 mem_ Ref
     }
   }
   if (s.ok() && save_manifest) {
@@ -1534,7 +1534,7 @@ Status DB::Open(const Options& options, const std::string& dbname,
   impl->mutex_.Unlock();
   if (s.ok()) {
     assert(impl->mem_ != nullptr);
-    *dbptr = impl;
+    *dbptr = impl; //DHQ: 返回的实际上指向 impl
   } else {
     delete impl;
   }

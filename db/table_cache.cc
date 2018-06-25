@@ -78,7 +78,7 @@ Status TableCache::FindTable(uint64_t file_number, uint64_t file_size,
   }
   return s;
 }
-//DHQ: Table 的  iter，都包含了对 table的 Ref。
+//DHQ: 返回Table 的  iter，都包含了对 table的 Ref。
 Iterator* TableCache::NewIterator(const ReadOptions& options,
                                   uint64_t file_number,
                                   uint64_t file_size,
