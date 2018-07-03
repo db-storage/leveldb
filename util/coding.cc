@@ -164,7 +164,7 @@ bool GetVarint64(Slice* input, uint64_t* value) {
   if (q == nullptr) {
     return false;
   } else {
-    *input = Slice(q, limit - q);
+    *input = Slice(q, limit - q);//DHQ: input被修改了
     return true;
   }
 }

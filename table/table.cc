@@ -68,7 +68,7 @@ Status Table::Open(const Options& options,
     // We've successfully read the footer and the index block: we're
     // ready to serve requests.
     Block* index_block = new Block(index_block_contents); //DHQ: block结构，主要用于读取。先从盘上获取内容，在构造Block结构。
-    Rep* rep = new Table::Rep;
+    Rep* rep = new Table::Rep; //DHQ: index_block，并没有放到 Cache中
     rep->options = options;
     rep->file = file;
     rep->metaindex_handle = footer.metaindex_handle();

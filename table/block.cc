@@ -167,7 +167,7 @@ class Block::Iter : public Iterator {
     // with a key < target
     uint32_t left = 0;
     uint32_t right = num_restarts_ - 1;
-    while (left < right) {
+    while (left < right) {//DHQ: 先查找restart array，二分法
       uint32_t mid = (left + right + 1) / 2;
       uint32_t region_offset = GetRestartPoint(mid);
       uint32_t shared, non_shared, value_length;
@@ -193,7 +193,7 @@ class Block::Iter : public Iterator {
     // Linear search (within restart block) for first key >= target
     SeekToRestartPoint(left);
     while (true) {
-      if (!ParseNextKey()) {
+      if (!ParseNextKey()) {//DHQ: 在restart point内部，是顺序查找的
         return;
       }
       if (Compare(key_, target) >= 0) {
@@ -233,7 +233,7 @@ class Block::Iter : public Iterator {
       restart_index_ = num_restarts_;
       return false;
     }
-    //DHQ: 返回的p，是non_shared的首地址
+    //DHQ: 返回的p，是 non_shared 的首地址
     // Decode next entry
     uint32_t shared, non_shared, value_length;
     p = DecodeEntry(p, limit, &shared, &non_shared, &value_length); //DHQ: 获得下一个 entry 的 key的各个部分长度

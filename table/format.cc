@@ -50,7 +50,7 @@ Status Footer::DecodeFrom(Slice* input) {
     return Status::Corruption("not an sstable (bad magic number)");
   }
 
-  Status result = metaindex_handle_.DecodeFrom(input);
+  Status result = metaindex_handle_.DecodeFrom(input);//DHQ: DecodeFrom 会修改 input slice，DecodeFixed32不会修改输入ptr
   if (result.ok()) {
     result = index_handle_.DecodeFrom(input);
   }
