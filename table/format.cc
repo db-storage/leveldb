@@ -87,7 +87,7 @@ Status ReadBlock(RandomAccessFile* file,
 
   // Check the crc of the type and the block contents
   const char* data = contents.data();    // Pointer to where Read put the data
-  if (options.verify_checksums) {
+  if (options.verify_checksums) {//DHQ: options里面的snapshot，没有被使用？
     const uint32_t crc = crc32c::Unmask(DecodeFixed32(data + n + 1));
     const uint32_t actual = crc32c::Value(data, n + 1);
     if (actual != crc) {

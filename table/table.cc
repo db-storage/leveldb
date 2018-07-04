@@ -153,7 +153,7 @@ static void ReleaseBlock(void* arg, void* h) {
   Cache::Handle* handle = reinterpret_cast<Cache::Handle*>(h);
   cache->Release(handle);
 }
-
+//DHQ: 根据index iter的value，读取data block，返回data block的iter
 // Convert an index iterator value (i.e., an encoded BlockHandle)
 // into an iterator over the contents of the corresponding block.
 Iterator* Table::BlockReader(void* arg,
@@ -204,7 +204,7 @@ Iterator* Table::BlockReader(void* arg,
     iter = block->NewIterator(table->rep_->options.comparator);
     if (cache_handle == nullptr) {
       iter->RegisterCleanup(&DeleteBlock, block, nullptr);
-    } else {
+    } else {//DHQ: 如果有cache_handle，那么需要注册cache的clean函数，不能直接delete
       iter->RegisterCleanup(&ReleaseBlock, block_cache, cache_handle);
     }
   } else {
