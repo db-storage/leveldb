@@ -101,7 +101,7 @@ Iterator* TableCache::NewIterator(const ReadOptions& options,
   }
   return result;
 }
-
+//Version::Get里面调用，之前已经获取了table的id （file number)
 Status TableCache::Get(const ReadOptions& options,
                        uint64_t file_number,
                        uint64_t file_size,

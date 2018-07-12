@@ -50,7 +50,7 @@ class IteratorWrapper {
   void SeekToLast()         { assert(iter_); iter_->SeekToLast();  Update(); }
 
  private:
-  void Update() {
+  void Update() {//DHQ: 注意，所有有状态修改的，都需要调用Update，因为valid_可能失效了
     valid_ = iter_->Valid();
     if (valid_) {
       key_ = iter_->key();

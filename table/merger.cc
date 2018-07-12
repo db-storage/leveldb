@@ -33,10 +33,10 @@ class MergingIterator : public Iterator {
   }
 
   virtual void SeekToFirst() {
-    for (int i = 0; i < n_; i++) {
+    for (int i = 0; i < n_; i++) {//DHQ: 各个iter是独立的，分别SeekToFirst即可
       children_[i].SeekToFirst();
     }
-    FindSmallest();
+    FindSmallest();//DHQ: 取最小的一个
     direction_ = kForward;
   }
 
@@ -44,8 +44,8 @@ class MergingIterator : public Iterator {
     for (int i = 0; i < n_; i++) {
       children_[i].SeekToLast();
     }
-    FindLargest();
-    direction_ = kReverse;
+    FindLargest();//DHQ: 取最大的一个
+    direction_ = kReverse;//DHQ: 设置了 kReverse
   }
 
   virtual void Seek(const Slice& target) {
@@ -64,7 +64,7 @@ class MergingIterator : public Iterator {
     // true for all of the non-current_ children since current_ is
     // the smallest child and key() == current_->key().  Otherwise,
     // we explicitly position the non-current_ children.
-    if (direction_ != kForward) {
+    if (direction_ != kForward) {//DHQ: 上次可能是SeekToLast/Prev，就需要做特殊调整
       for (int i = 0; i < n_; i++) {
         IteratorWrapper* child = &children_[i];
         if (child != current_) {
@@ -156,7 +156,7 @@ void MergingIterator::FindSmallest() {
   IteratorWrapper* smallest = nullptr;
   for (int i = 0; i < n_; i++) {
     IteratorWrapper* child = &children_[i];
-    if (child->Valid()) {
+    if (child->Valid()) {//DHQ: 如果某个child iter->Next()后，变成invalid，那么说明它已经遍历完了，就是结束了。
       if (smallest == nullptr) {
         smallest = child;
       } else if (comparator_->Compare(child->key(), smallest->key()) < 0) {

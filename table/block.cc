@@ -149,7 +149,7 @@ class Block::Iter : public Iterator {
     while (GetRestartPoint(restart_index_) >= original) {
       if (restart_index_ == 0) {
         // No more entries
-        current_ = restarts_;
+        current_ = restarts_; //DHQ: this will caused iter invalid
         restart_index_ = num_restarts_;
         return;
       }

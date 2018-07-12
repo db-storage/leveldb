@@ -37,7 +37,7 @@ namespace {
 // representation into a single entry while accounting for sequence
 // numbers, deletion markers, overwrites, etc.
 class DBIter: public Iterator {//DHQ: 上面提到了 “multiple entries for the same userkey ”，Iter是能看到同一个 userkey的多个 k/v的
- public: //DHQ: DBIter 主要是个封装 Reverse，snapshot这些逻辑. InternalIterator ，不管这些逻辑，只有简单的遍历
+ public: //DHQ: DBIter 主要是个封装 Reverse，snapshot这些逻辑. 其他内部的Iter ，不管这些逻辑，只有简单的遍历
   // Which direction is the iterator currently moving?
   // (1) When moving forward, the internal iterator is positioned at
   //     the exact entry that yields this->key(), this->value()

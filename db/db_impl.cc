@@ -921,7 +921,7 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
   SequenceNumber last_sequence_for_key = kMaxSequenceNumber;
   for (; input->Valid() && !shutting_down_.Acquire_Load(); ) {
     // Prioritize immutable compaction work
-    if (has_imm_.NoBarrier_Load() != nullptr) {
+    if (has_imm_.NoBarrier_Load() != nullptr) {//DHQ: 组成input 的，不包含imm，虽然可能有level-0. imm_生成的 level-0，应该不会再被加入input
       const uint64_t imm_start = env_->NowMicros();
       mutex_.Lock();
       if (imm_ != nullptr) {
@@ -959,7 +959,7 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
         last_sequence_for_key = kMaxSequenceNumber;
       }
       //DHQ： key "xyz"，有两个seqno, 18, 22，而 smallest_snapshot = 28。那么先找到的是22，后找到18。 22 < 28，所以 18可以被drop
-      if (last_sequence_for_key <= compact->smallest_snapshot) {
+      if (last_sequence_for_key <= compact->smallest_snapshot) {//如果与上次循环是相同的user_key，那么这次循环拿到的seq更小，同一user_key，按照seq递减顺序排列
         // Hidden by an newer entry for same user key
         drop = true;    // (A)
       } else if (ikey.type == kTypeDeletion &&
@@ -975,7 +975,7 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
         drop = true;
       }
 
-      last_sequence_for_key = ikey.sequence;
+      last_sequence_for_key = ikey.sequence;//DHQ: 本轮处理完了，对于下一轮来说，就是 last_sequence
     }
 #if 0
     Log(options_.info_log,
