@@ -34,7 +34,7 @@ Status BuildTable(const std::string& dbname,
 
     TableBuilder* builder = new TableBuilder(options, file); //DHQ ： file传入
     meta->smallest.DecodeFrom(iter->key());
-    for (; iter->Valid(); iter->Next()) {
+    for (; iter->Valid(); iter->Next()) {//没有考虑seqno，如果用户多次插入同一个key，全部持久化？还是在插入memtable时检查了？
       Slice key = iter->key();
       meta->largest.DecodeFrom(key);
       builder->Add(key, iter->value()); //DHQ: Key/val Add进去

@@ -67,12 +67,14 @@ class MergingIterator : public Iterator {
     if (direction_ != kForward) {//DHQ: 上次可能是SeekToLast/Prev，就需要做特殊调整
       for (int i = 0; i < n_; i++) {
         IteratorWrapper* child = &children_[i];
-        if (child != current_) {
-          child->Seek(key());
-          if (child->Valid() &&
-              comparator_->Compare(key(), child->key()) == 0) {
+        if (child != current_)
+        { //如果3，4都有key “abc”，上次是prev，current是4的abc，说明3的abc在之前已经返回过了。如果此时仅仅对4执行next，则出现3的游标在abc左边，4的在右边。这个是不应该出现的情况。
+          child->Seek(key());//TODO: 即使如此，如果此前是prev, 其他key不同的层级的，不需要调整？
+          if (child->Valid() && //感觉Rocksdb的 MergingIterator::SwitchToForward() 才是合理的
+              comparator_->Compare(key(), child->key()) == 0)
+          {
             child->Next();
-          }
+          }//DHQ: 默认就是返回比他更大的key，如果invalid()，到了尾部。没有可调整余地。如果是 prev，则seek to last，可以继续往前。
         }
       }
       direction_ = kForward;

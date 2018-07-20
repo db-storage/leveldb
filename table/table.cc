@@ -203,9 +203,9 @@ Iterator* Table::BlockReader(void* arg,
   if (block != nullptr) {//DHQ: 调用 block 的 NewIterator
     iter = block->NewIterator(table->rep_->options.comparator);
     if (cache_handle == nullptr) {
-      iter->RegisterCleanup(&DeleteBlock, block, nullptr);
+      iter->RegisterCleanup(&DeleteBlock, block, nullptr);//DHQ: delete block自身
     } else {//DHQ: 如果有cache_handle，那么需要注册cache的clean函数，不能直接delete
-      iter->RegisterCleanup(&ReleaseBlock, block_cache, cache_handle);
+      iter->RegisterCleanup(&ReleaseBlock, block_cache, cache_handle);//DHQ: iter删除时，Release cache_handle(handle的value有block指针)
     }
   } else {
     iter = NewErrorIterator(s);

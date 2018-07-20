@@ -15,14 +15,14 @@ struct TableAndFile {
   RandomAccessFile* file;
   Table* table;
 };
-//DHQ: 这个是给cache的callback，cache删除 entry时，调用
+//DHQ: 这个是给 cache 的callback，cache 删除 entry时，执行上层提供的语义
 static void DeleteEntry(const Slice& key, void* value) {
   TableAndFile* tf = reinterpret_cast<TableAndFile*>(value);
   delete tf->table;
   delete tf->file;
   delete tf;
 }
-
+//这里arg1是cachep，arg2是handle
 static void UnrefEntry(void* arg1, void* arg2) {
   Cache* cache = reinterpret_cast<Cache*>(arg1);
   Cache::Handle* h = reinterpret_cast<Cache::Handle*>(arg2);
@@ -35,7 +35,7 @@ TableCache::TableCache(const std::string& dbname,
     : env_(options.env),
       dbname_(dbname),
       options_(options),
-      cache_(NewLRUCache(entries)) {
+      cache_(NewLRUCache(entries)) {//DHQ: 创建时，大小是 TableCacheSize(options_)
 }
 
 TableCache::~TableCache() {
@@ -95,7 +95,7 @@ Iterator* TableCache::NewIterator(const ReadOptions& options,
 
   Table* table = reinterpret_cast<TableAndFile*>(cache_->Value(handle))->table;
   Iterator* result = table->NewIterator(options);
-  result->RegisterCleanup(&UnrefEntry, cache_, handle);
+  result->RegisterCleanup(&UnrefEntry, cache_, handle); //DHQ: UnrefEntry 需要cache和handle两个参数，Iterator删除时，调用
   if (tableptr != nullptr) {
     *tableptr = table;
   }

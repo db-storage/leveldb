@@ -18,7 +18,7 @@ Cache::~Cache() {
 }
 
 namespace {
-
+//DHQ: in_cache表示Cache本身对entry有ref.  提到了duplicate key
 // LRU cache implementation
 //
 // Cache entries have an "in_cache" boolean indicating whether the cache has a
@@ -238,7 +238,7 @@ void LRUCache::Unref(LRUHandle* e) {
     LRU_Append(&lru_, e);
   }
 }
-
+//DHQ： 从当前所在list删除
 void LRUCache::LRU_Remove(LRUHandle* e) {
   e->next->prev = e->prev;
   e->prev->next = e->next;
@@ -270,7 +270,7 @@ Cache::Handle* LRUCache::Insert(
     const Slice& key, uint32_t hash, void* value, size_t charge,
     void (*deleter)(const Slice& key, void* value)) {
   MutexLock l(&mutex_);
-
+  //DHQ: key作为LRUHandle的一部分了
   LRUHandle* e = reinterpret_cast<LRUHandle*>(
       malloc(sizeof(LRUHandle)-1 + key.size()));
   e->value = value;
@@ -284,10 +284,10 @@ Cache::Handle* LRUCache::Insert(
 
   if (capacity_ > 0) {
     e->refs++;  // for the cache's reference.
-    e->in_cache = true;
+    e->in_cache = true;//DHQ: Cache自身对其的ref
     LRU_Append(&in_use_, e);
     usage_ += charge;
-    FinishErase(table_.Insert(e));
+    FinishErase(table_.Insert(e));//DHQ: Insert返回了同样key的old entry，将其移动到lru。
   } else {  // don't cache. (capacity_==0 is supported and turns off caching.)
     // next is read by key() in an assert, so it must be initialized
     e->next = nullptr;

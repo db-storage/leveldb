@@ -132,7 +132,7 @@ class Version {
   Version* next_;               // Next version in linked list
   Version* prev_;               // Previous version in linked list
   int refs_;                    // Number of live refs to this version
-
+  //这些files_，其实都有ref，防止访问过程中被删除了。
   // List of files per level
   std::vector<FileMetaData*> files_[config::kNumLevels];
 
