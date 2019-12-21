@@ -67,12 +67,12 @@ class MemTableIterator: public Iterator {
   virtual Status status() const { return Status::OK(); }
 
  private:
-  MemTable::Table::Iterator iter_;
-  std::string tmp_;       // For passing to EncodeKey
+   MemTable::Table::Iterator iter_; //DHQ: Memtable::Table，实际上是skiplist
+   std::string tmp_;                // For passing to EncodeKey
 
-  // No copying allowed
-  MemTableIterator(const MemTableIterator&);
-  void operator=(const MemTableIterator&);
+   // No copying allowed
+   MemTableIterator(const MemTableIterator &);
+   void operator=(const MemTableIterator &);
 };
 
 Iterator* MemTable::NewIterator() {

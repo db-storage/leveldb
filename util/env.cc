@@ -36,7 +36,7 @@ void Log(Logger* info_log, const char* format, ...) {
     va_end(ap);
   }
 }
-
+//DHQ: 大部分不是成员函数，env是参数。没必要搞成成员函数
 static Status DoWriteStringToFile(Env* env, const Slice& data,
                                   const std::string& fname,
                                   bool should_sync) {

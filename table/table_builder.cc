@@ -129,12 +129,13 @@ void TableBuilder::Flush() {//DHQ: flush的是 data block，不是整个table。
   if (!ok()) return;
   if (r->data_block.empty()) return;
   assert(!r->pending_index_entry);
+  // DHQ: WriteBlock里面修改了r->offset
   WriteBlock(&r->data_block, &r->pending_handle);
   if (ok()) {
     r->pending_index_entry = true;
     r->status = r->file->Flush();
   }
-  if (r->filter_block != nullptr) {
+  if (r->filter_block != nullptr) {//WriteBlock完，修改了r->offset后，才调用StartBlock.
     r->filter_block->StartBlock(r->offset);
   }
 }

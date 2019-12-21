@@ -839,7 +839,7 @@ Status DBImpl::FinishCompactionOutputFile(CompactionState* compact,
   delete compact->builder;
   compact->builder = nullptr;
 
-  // Finish and check for file errors
+  // Finish and check for file error000s
   if (s.ok()) {
     s = compact->outfile->Sync();
   }
@@ -989,7 +989,8 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
 
     if (!drop) {
       // Open output file if necessary
-      if (compact->builder == nullptr) {
+      if (compact->builder == nullptr)
+      { //DHQ: FinishCompactionOutputFile后，会变为nullptr，再申请
         status = OpenCompactionOutputFile(compact);
         if (!status.ok()) {
           break;
@@ -1000,7 +1001,7 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
       }
       compact->current_output()->largest.DecodeFrom(key);
       compact->builder->Add(key, input->value());
-
+      //DHQ: 判断大小，超出了则要换文件
       // Close output file if it is big enough
       if (compact->builder->FileSize() >=
           compact->compaction->MaxOutputFileSize()) {
@@ -1135,7 +1136,7 @@ Status DBImpl::Get(const ReadOptions& options,
   current->Ref(); //DHQ: 这个current的ref，根mem_table时两码事。 Version 的Ref  保证 SST 不变
 
   bool have_stat_update = false;
-  Version::GetStats stats;1
+  Version::GetStats stats;
 
   // Unlock while reading from files and memtables
   {
@@ -1150,7 +1151,7 @@ Status DBImpl::Get(const ReadOptions& options,
       s = current->Get(options, lkey, value, &stats);
       have_stat_update = true;
     }
-    mutex_.Lock(); //DHQ: Unref这种操作，也需要 lock
+    mutex_.Lock(); //DHQ: 我认为这里恢复Lock，一是为了利用MutexLock，并不是为了Unref之类的。MaybeScheduleCompaction可能需要lock
   }
 
   if (have_stat_update && current->UpdateStats(stats)) {
@@ -1221,7 +1222,7 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* my_batch) {
   Writer* last_writer = &w;  //DHQ: 空的 batch，用于 compaction
   if (status.ok() && my_batch != nullptr) {  // nullptr batch is for compactions
     WriteBatch* updates = BuildBatchGroup(&last_writer);//DHQ: 从 writers_ 构建 updates
-    WriteBatchInternal::SetSequence(updates, last_sequence + 1);
+    WriteBatchInternal::SetSequence(updates, last_sequence + 1); //DHQ: 虽然写下去时，记录的是 last_sequence+1，但是WriteBatchInternal::InsertInto，会给每个batch一个不同的seq
     last_sequence += WriteBatchInternal::Count(updates);
 
     // Add to log and apply to memtable.  We can release the lock
@@ -1229,16 +1230,16 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* my_batch) {
     // and protects against concurrent loggers and concurrent writes
     // into mem_.
     {
-      mutex_.Unlock();
-      status = log_->AddRecord(WriteBatchInternal::Contents(updates));//DHQ: log中加入记录
+      mutex_.Unlock(); //DHQ: BuildBatchGroup 的过程是加锁的，在加锁后到来的，没法加入到 writers_，直到 BuildBatchGroup结束
+      status = log_->AddRecord(WriteBatchInternal::Contents(updates)); //DHQ: log中加入记录，BuildBatchGroup 已经做了batch的合并
       bool sync_error = false;
-      if (status.ok() && options.sync) {
+      if (status.ok() && options.sync) {//DHQ: BUG? 两个并发的AddRecord 和 Sync，中间断电，什么结果？ 会不会seqno较大的被写入log，小的没有？
         status = logfile_->Sync(); //DHQ： 根据设置，是否做 sync
         if (!status.ok()) {
           sync_error = true;
         }
       }
-      if (status.ok()) {
+      if (status.ok()) {//DHQ: 单线程插入 mem_
         status = WriteBatchInternal::InsertInto(updates, mem_);
       }
       mutex_.Lock();
@@ -1266,7 +1267,7 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* my_batch) {
   }
 
   // Notify new head of write queue
-  if (!writers_.empty()) {
+  if (!writers_.empty()) {//DHQ: 未搭上车的哪些，构成了新的head，也被signal，后续再构成新的 BatchGroup
     writers_.front()->cv.Signal();
   }
 
@@ -1275,7 +1276,7 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* my_batch) {
 
 // REQUIRES: Writer list must be non-empty
 // REQUIRES: First writer must have a non-null batch
-WriteBatch* DBImpl::BuildBatchGroup(Writer** last_writer) {
+WriteBatch* DBImpl::BuildBatchGroup(Writer** last_writer) {//DHQ: 这个类似于rocksdb的 MergeBatch
   mutex_.AssertHeld();
   assert(!writers_.empty());
   Writer* first = writers_.front();

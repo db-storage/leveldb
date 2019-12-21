@@ -25,11 +25,11 @@ char* Arena::AllocateFallback(size_t bytes) {
     // Object is more than a quarter of our block size.  Allocate it separately
     // to avoid wasting too much space in leftover bytes.
     char* result = AllocateNewBlock(bytes);
-    return result;
+    return result;//DHQ: arena的上一个未用完的block，可能用于下一次的Allocate
   }
 
   // We waste the remaining space in the current block.
-  alloc_ptr_ = AllocateNewBlock(kBlockSize);
+  alloc_ptr_ = AllocateNewBlock(kBlockSize);//DHQ: 上一个可能未用完的block，不在被分配
   alloc_bytes_remaining_ = kBlockSize;
 
   char* result = alloc_ptr_;

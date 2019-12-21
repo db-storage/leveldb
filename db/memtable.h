@@ -27,7 +27,7 @@ class MemTable {
 
   // Drop reference count.  Delete if no more references exist.
   void Unref() {//DHQ: maybe we can replace this with shared_ptr/unique_ptr, depends on the scenario?
-    --refs_;
+    --refs_;//没有使用原子变量，所以必须有锁
     assert(refs_ >= 0);
     if (refs_ <= 0) {
       delete this;
@@ -70,7 +70,7 @@ class MemTable {
   friend class MemTableIterator;
   friend class MemTableBackwardIterator;
 
-  typedef SkipList<const char*, KeyComparator> Table;
+  typedef SkipList<const char*, KeyComparator> Table; //这里定义的MemTable::Table，是个SkipList
 
   KeyComparator comparator_;
   int refs_;

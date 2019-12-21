@@ -64,11 +64,11 @@ class DBIter: public Iterator {//DHQ: 上面提到了 “multiple entries for th
   }
   virtual bool Valid() const { return valid_; }
   virtual Slice key() const {
-    assert(valid_);
-    return (direction_ == kForward) ? ExtractUserKey(iter_->key()) : saved_key_;
+    assert(valid_);//如果当前是kForward，saved_key_无效，需要从iter_取
+    return (direction_ == kForward) ? ExtractUserKey(iter_->key()) : saved_key_; //只有当前为 kReverse时，saved_key_才保证有效
   }
   virtual Slice value() const {
-    assert(valid_);
+    assert(valid_);//saved_value，与上面saved_key_ 使用类似。仅仅在 kReverse 才有效
     return (direction_ == kForward) ? iter_->value() : saved_value_;
   }
   virtual Status status() const {
@@ -97,7 +97,7 @@ class DBIter: public Iterator {//DHQ: 上面提到了 “multiple entries for th
   inline void ClearSavedValue() {
     if (saved_value_.capacity() > 1048576) {
       std::string empty;
-      swap(empty, saved_value_);
+      swap(empty, saved_value_);//DHQ: free string's space.
     } else {
       saved_value_.clear();
     }
@@ -114,7 +114,7 @@ class DBIter: public Iterator {//DHQ: 上面提到了 “multiple entries for th
   SequenceNumber const sequence_;
 
   Status status_;
-  std::string saved_key_;     // == current key when direction_==kReverse
+  std::string saved_key_;     // == current key when direction_==kReverse  仅在 kReverse 时有效
   std::string saved_value_;   // == current raw value when direction_==kReverse
   Direction direction_;
   bool valid_;
@@ -133,7 +133,7 @@ inline bool DBIter::ParseKey(ParsedInternalKey* ikey) {
   bytes_counter_ -= n;
   while (bytes_counter_ < 0) {
     bytes_counter_ += RandomPeriod();
-    db_->RecordReadSample(k);
+    db_->RecordReadSample(k); //这个是根据读的一些统计量，来触发compaction的，我们不用这个
   }
   if (!ParseInternalKey(k, ikey)) {//DHQ: InternalKey，从 slice 转结构体
     status_ = Status::Corruption("corrupted internal key in DBIter");
@@ -164,42 +164,42 @@ void DBIter::Next() {
     // saved_key_ already contains the key to skip past.
   } else {//DHQ: 上次也是Forward，则直接从上次的key(作为 saved_key_ )，开始找，必须跳过上次的user_key，不重复返回
     // Store in saved_key_ the current key so we skip it below.
-    SaveKey(ExtractUserKey(iter_->key()), &saved_key_);
+    SaveKey(ExtractUserKey(iter_->key()), &saved_key_); //临时save的，让 FindNextUserEntry 跳过当前user key
   }
 
-  FindNextUserEntry(true, &saved_key_);
+  FindNextUserEntry(true, &saved_key_);//true，表明这个saved_key就要被skip掉。 saved_key_作为skip使用，因为需要跳过相同的user_key
 }
 //DHQ: 避免两次获得相同的user_key，所以 上面调用时，参数skipping = true
 void DBIter::FindNextUserEntry(bool skipping, std::string* skip) {
   // Loop until we hit an acceptable entry to yield
   assert(iter_->Valid());
   assert(direction_ == kForward);
-  do {
+  do {//如果有k1, k2, k3，当前时k1, k2 被del了(<sequence_的最大的，是Del)，那么应返回k3。k2的多个sequnce，都需要被skip掉。
     ParsedInternalKey ikey;
     if (ParseKey(&ikey) && ikey.sequence <= sequence_) {//DHQ:如果Del的seqno > sequence_，那么不应该造成skip。快照含义如此
       switch (ikey.type) {
         case kTypeDeletion://DHQ: 遇到一个 delete，在kForward模式下，seqno 大的先遇到
           // Arrange to skip all upcoming entries for this key since
           // they are hidden by this deletion.
-          SaveKey(ikey.user_key, skip);
+          SaveKey(ikey.user_key, skip);//本循环后续，会遇到相同user_key的，判断skip
           skipping = true;
-          break;
+          break;//switch
         case kTypeValue:
           if (skipping &&
-              user_comparator_->Compare(ikey.user_key, *skip) <= 0) {//DHQ: 之前遇到了一个 delete，相同 user_key的，需要被 skip掉
+              user_comparator_->Compare(ikey.user_key, *skip) <= 0) {//DHQ: skip再不同的情况下（上一个操作时prev还是next），含义不同，需要被 skip掉
             // Entry hidden
-          } else {//DHQ: 当前不在skip状态，或者换了user key
+          } else {//DHQ: 当前不在skip状态，或者换了 user key
             valid_ = true;
-            saved_key_.clear();
-            return;
+            saved_key_.clear();//这个也clear了，不是总有值，虽然是valid的, TODO: 下次key()，返回的是什么？
+            return;//DHQ:找到了，直接return
           }
-          break;
+          break; //switch
       }
     }
     iter_->Next(); //DHQ: 实际上是上面 if 的 else
   } while (iter_->Valid());
   saved_key_.clear();
-  valid_ = false;
+  valid_ = false; //DHQ: 走到这里，肯定时invalid的
 }
 
 void DBIter::Prev() {
@@ -215,43 +215,58 @@ void DBIter::Prev() {
       if (!iter_->Valid()) {
         valid_ = false;
         saved_key_.clear(); //DHQ: 分别 clear saved_key 和 saved_value
-        ClearSavedValue();
-        return;
+        ClearSavedValue();//因为可能较大，所以可能释放 saved_value_的内存
+        return; //invalid， 直接 return 了，没有改变direction_
       }
       if (user_comparator_->Compare(ExtractUserKey(iter_->key()),
-                                    saved_key_) < 0) {//DHQ: 直到user key改变了，才能break
+                                    saved_key_) < 0) {//DHQ: 直到user key改变了（小于saved_key_），才能break
         break;
       }
     }
     direction_ = kReverse;
-  }
-
+  }//else，表明上次不是Forward，那么saved_key_应该也有值，因为valid_
+  //上面循环到此时，已经找到了一个 user key < saved_key_的 key，并且是valid的，此时iter应该位于一个小于saved_key_的最小seqno的位置。否则，上面就return了。
   FindPrevUserEntry();
 }
 //DHQ:参见"since we sort sequence numbers in decreasing order..."， prev是不同的
+
+//与next的主要差别是：prev 最先遇到的是 seqno 小的key，而不是大的。所以，只有iter_遇到更小的user key，才能结束循环，但是结束时，不能使用iter_的key了。只有搞个saved_key_
+//*********正常的prev操作，iter_和saved_key_不是同一个位置(iter_靠左)，重要*************
+//*** 这是因为，prev操作，只有往左遇到user key变化了，才能判断是否结束循环。而此时iter_已经指向左边key，saved_key_则是要返回的key
+//当然，如果左边已经没有key了，那么iter_是invalid. iter_ 变为Invalid只是结束向左循环探测的条件，不代表DBIter是invalid的，此时saved_key_是有效的，可以正常返回key()
+
+//这个函数，被Prev和SeekForPrev调用。但是进入此函数时，情况不同。
+//假设有key 'A'和'B'
+//Case 1) 如果之前执行了执行Seek('B')，现在执行Prev()，则此时 iter_已经指向了'A'，而不是'B',但是saved_key_是'B'
+//Case 2) 对于SeekForPrev('B')操作，进入此函数时，iter_指向的就是'B'
+//Case 3) 对于SeekToLast()操作，进入此函数时，iter_指向'B'右边
+//虽然名字为FindPrev，但是对于Case 2，实际上找到的是'B'(如果key的sequence满足)
+
+//函数返回时，如果saved_key_是x，那么iter_又指向了x左边的key或者Invalid了，而不是x
 void DBIter::FindPrevUserEntry() {
   assert(direction_ == kReverse);
 
-  ValueType value_type = kTypeDeletion;
-  if (iter_->Valid()) {
+  ValueType value_type = kTypeDeletion;  //注意这个value_type的赋值，是表示上一个key的type，不是对应ikey的type。实在Compare()之后，才赋值的
+  if (iter_->Valid()) {//因为要保证发生了user key变化(不是之前那个)，所以比较复杂
     do {
-      ParsedInternalKey ikey;
-      if (ParseKey(&ikey) && ikey.sequence <= sequence_) {
-        if ((value_type != kTypeDeletion) &&
-            user_comparator_->Compare(ikey.user_key, saved_key_) < 0) {//DHQ: 感觉这里会找到一个应该被跳过的key(del了)？ 还是因为只为每个snapshot保留一个版本，所以没问题？应该没问题
+      ParsedInternalKey ikey;//下面的Compare，如果一个user key连续出现两次，那么不会break，因为不满足 Compare(ikey.user_key, saved_key_) < 0
+      if (ParseKey(&ikey) && ikey.sequence <= sequence_) {//只考虑 <= sequence_的, 大的过滤掉
+        if ((value_type != kTypeDeletion) && //上一个key，不是 kTypeDeletion(即saved_key_有值)，并且本次的user_key比上次saved_key_小(即换了key)
+            user_comparator_->Compare(ikey.user_key, saved_key_) < 0) {//DHQ: 找到了一个小于save_key的且不是delete的，成功
           // We encountered a non-deleted value in entries for previous keys,
-          break;
+          break; //这个函数是prev()调用的，在break后，key()函数返回的是saved_key_，不是ikey.user_key。
         }
-        value_type = ikey.type;
+        value_type = ikey.type;//注意！！！！！这里才修改 value_type，应该改名为 last_value_type!
         if (value_type == kTypeDeletion) {
-          saved_key_.clear();
-          ClearSavedValue();
-        } else {
+          saved_key_.clear(); //clear过后，下次循环到上面语句，user_comparator_->Compare 总失败？
+          ClearSavedValue();  //TODO: 如果进入函数时，当前key是C，并且没有seq更大的了，(B, 103, v3), (B, 102, V2), (B, 100, Del)，先找到 (B, 100, Del)
+        if ((value_type != kTypeDeletion) && //上一个key，不是 kTypeDeletion(即saved_key_有值)，并且本次的user_key比上次saved_key_小
+        } else { //这里判断的是ikey.type，value_type 已经变了
           Slice raw_value = iter_->value();
           if (saved_value_.capacity() > raw_value.size() + 1048576) {
             std::string empty;
-            swap(empty, saved_value_); //DHQ: 跟临时变量交换，让临时变量释放空间？因为新值太小，造成saved_key_浪费空间太大了。
-          }
+            swap(empty, saved_value_); //DHQ: 跟临时变量交换，让临时变量释放空间
+          }//保留这个可以作为saved_key_，然后接着往前找，直到：user_key变了，说明当前user_key的最大seqno已经被找到，然后key()返回的是saved_key_
           SaveKey(ExtractUserKey(iter_->key()), &saved_key_);
           saved_value_.assign(raw_value.data(), raw_value.size());
         }
@@ -260,14 +275,14 @@ void DBIter::FindPrevUserEntry() {
     } while (iter_->Valid());
   }
 
-  if (value_type == kTypeDeletion) {
+  if (value_type == kTypeDeletion) {//循环执行了0次的情况，才会走这个分支
     // End
     valid_ = false;
     saved_key_.clear();
     ClearSavedValue();
     direction_ = kForward;
   } else {
-    valid_ = true;
+    valid_ = true;//实际上是遇到prev的prev或者iter无效后后，才停止的。这时候不需要再设置saved_key_，因为已经在之前设置完了
   }
 }
 //DHQ: 因为要找的是 <= 给定seq的有效的key(非DEL)，所以FindNextUserEntry去除无效的

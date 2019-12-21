@@ -55,7 +55,7 @@ Status WriteBatch::Iterate(Handler* handler) const {
   while (!input.empty()) {
     found++;
     char tag = input[0];
-    input.remove_prefix(1);
+    input.remove_prefix(1);//DHQ: skip掉tag/type信息
     switch (tag) {
       case kTypeValue:
         if (GetLengthPrefixedSlice(&input, &key) &&
@@ -98,11 +98,11 @@ SequenceNumber WriteBatchInternal::Sequence(const WriteBatch* b) {
 void WriteBatchInternal::SetSequence(WriteBatch* b, SequenceNumber seq) {
   EncodeFixed64(&b->rep_[0], seq);
 }
-
+//DHQ: batch里面每个k/v，都计入count，每个都有type，以及length。实际上后续每个k/v都有一个sequence
 void WriteBatch::Put(const Slice& key, const Slice& value) {
   WriteBatchInternal::SetCount(this, WriteBatchInternal::Count(this) + 1);
   rep_.push_back(static_cast<char>(kTypeValue));
-  PutLengthPrefixedSlice(&rep_, key);
+  PutLengthPrefixedSlice(&rep_, key);//有长度信息
   PutLengthPrefixedSlice(&rep_, value);
 }
 

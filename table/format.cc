@@ -61,7 +61,7 @@ Status Footer::DecodeFrom(Slice* input) {
   }
   return result;
 }
-//DHQ: BlockBuilder 里面在写时做了 compress，这里做解压
+//DHQ: BlockBuilder 里面在写时做了 compress，这里做解压，而不仅仅是file->Read()
 Status ReadBlock(RandomAccessFile* file,
                  const ReadOptions& options,
                  const BlockHandle& handle,

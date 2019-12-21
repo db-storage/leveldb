@@ -705,7 +705,7 @@ void PosixEnv::BGThread() {
     queue_.pop_front();
 
     PthreadCall("unlock", pthread_mutex_unlock(&mu_));
-    (*function)(arg);
+    (*function)(arg);//DHQ: unlocked before calling the func
   }
 }
 

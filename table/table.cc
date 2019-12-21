@@ -47,7 +47,7 @@ Status Table::Open(const Options& options,
   char footer_space[Footer::kEncodedLength];
   Slice footer_input;
   Status s = file->Read(size - Footer::kEncodedLength, Footer::kEncodedLength,
-                        &footer_input, footer_space);//DHQ: 先读取 footer
+                        &footer_input, footer_space);//DHQ: 先读取 footer，直接读取file即可
   if (!s.ok()) return s;
 
   Footer footer;
@@ -76,7 +76,7 @@ Status Table::Open(const Options& options,
     rep->cache_id = (options.block_cache ? options.block_cache->NewId() : 0);
     rep->filter_data = nullptr;
     rep->filter = nullptr;
-    *table = new Table(rep);
+    *table = new Table(rep);//DHQ: new table并返回
     (*table)->ReadMeta(footer);
   }
 
@@ -175,7 +175,7 @@ Iterator* Table::BlockReader(void* arg,
     BlockContents contents;
     if (block_cache != nullptr) {
       char cache_key_buffer[16];
-      EncodeFixed64(cache_key_buffer, table->rep_->cache_id);
+      EncodeFixed64(cache_key_buffer, table->rep_->cache_id);//DHQ: 为什么搞个cache_id? 不直接用sst file id? 比较奇怪
       EncodeFixed64(cache_key_buffer+8, handle.offset());
       Slice key(cache_key_buffer, sizeof(cache_key_buffer));
       cache_handle = block_cache->Lookup(key);
@@ -186,7 +186,7 @@ Iterator* Table::BlockReader(void* arg,
         if (s.ok()) {
           block = new Block(contents);
           if (contents.cachable && options.fill_cache) {
-            cache_handle = block_cache->Insert(
+            cache_handle = block_cache->Insert(//会insert到block_cache，如果有block_cache
                 key, block, block->size(), &DeleteCachedBlock);
           }
         }
